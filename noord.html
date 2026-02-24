@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Topografie – Provincies kiezen</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    body { margin: 0; background: #f6f7fb; color: #111; }
+    .wrap { max-width: 1050px; margin: 0 auto; padding: 16px; }
+    h1 { font-size: 20px; margin: 0 0 10px; }
+
+    .grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+    @media (min-width: 900px) { .grid { grid-template-columns: 2fr 1fr; } }
+
+    .card {
+      background: #fff; border-radius: 14px; padding: 12px;
+      box-shadow: 0 6px 18px rgba(0,0,0,.06);
+    }
+    canvas { width: 100%; height: auto; border-radius: 14px; background:#e9ecf6; }
+
+    .row { display:flex; flex-wrap: wrap; gap: 10px; align-items:center; }
+    .col { display:grid; gap: 10px; }
+    button, input[type="text"] {
+      font-size: 14px; padding: 10px 12px; border-radius: 10px; border: 1px solid #d7dbe7;
+      background: #fff;
+    }
+    button { cursor:pointer; }
+    button.primary { background:#111; color:#fff; border-color:#111; }
+    button:disabled { opacity:.6; cursor:not-allowed; }
+
+    .prompt { font-size: 16px; padding: 10px 12px; border-radius: 12px; background:#f1f3ff; border: 1px solid #dfe3ff; }
+    .feedback { font-weight: 700; min-height: 22px; }
+    .good { color:#0a7a2f; }
+    .bad { color:#b00020; }
+
+    .stats { display:flex; gap:10px; flex-wrap: wrap; }
+    .pill { background:#f2f4fa; border:1px solid #e3e7f5; padding:6px 10px; border-radius:999px; font-size:13px; }
+
+    .small { font-size: 12px; color:#444; line-height:1.4; }
+
+    .divider { height:1px; background:#eef1fb; margin:10px 0; }
+
+    .chklist { display:grid; gap:8px; }
+    .chk { display:flex; gap:8px; align-items:center; }
+    .chk input { transform: scale(1.1); }
+    .tag { font-size: 12px; padding: 2px 8px; border-radius: 999px; background:#f2f4fa; border:1px solid #e3e7f5; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Topografie – kies provincies</h1>
+
+  <div class="grid">
+    <div class="card">
+      <canvas id="map" width="608" height="425"></canvas>
+      <div class="small" style="margin-top:10px;">
+        Tip: zet dit daarna op het beginscherm van de iPad. Selectie wordt onthouden.
+      </div>
+    </div>
+
+    <div class="card col">
+      <div class="row">
+        <button id="mode1" class="primary">Modus 1: klik</button>
+        <button id="mode2">Modus 2: typ</button>
+      </div>
+
+      <div class="prompt" id="prompt">Kies eerst provincies.</div>
+
+      <div id="typingArea" class="row" style="display:none;">
+        <input id="answer" type="text" placeholder="Typ de plaatsnaam…" autocomplete="off" />
+        <button id="check" class="primary">Controleer</button>
+        <button id="skip">Sla over</button>
+      </div>
+
+      <div class="feedback" id="feedback"></div>
+
+      <div class="stats">
+        <div class="pill">Goed: <span id="good">0</span></div>
+        <div class="pill">Fout: <span id="bad">0</span></div>
+        <div class="pill">Totaal: <span id="total">0</span></div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="row">
+        <button id="next" class="primary">Volgende</button>
+        <button id="reset">Reset score</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <div>
+        <div class="row" style="justify-content:space-between;">
+          <b>Provincies in toets</b>
+          <span class="tag" id="activeCount">0 plaatsen</span>
+        </div>
+        <div class="chklist" id="provinceList"></div>
+        <div class="row" style="margin-top:10px;">
+          <button id="selectAll">Alles</button>
+          <button id="selectNone">Niets</button>
+          <button id="startTest" class="primary">Start toets</button>
+        </div>
+        <div class="small" style="margin-top:10px;">
+          Vanavond vullen we hier de 3 nieuwe provincies + plaatsen in en vervangen we de kaart.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  // ======= CONFIG =======
+  const MAP_IMAGE = "noordnederland_schoon2.png"; // vanavond vervangen door nieuwe kaart
+  const HIT_RADIUS_PX = 16;
+  const SHOW_ALL_DOTS = true;
+  const LS_KEY = "topo_selected_provinces_v1";
+
+  // ======= DATA (nu: huidige set; vanavond uitbreiden) =======
+  const PLACES = [
+    { name: "Delfzijl",   province: "Groningen", x: 464.7, y: 101.8 },
+    { name: "Groningen",  province: "Groningen", x: 402.3, y: 135.2 },
+    { name: "Veendam",    province: "Groningen", x: 457.5, y: 168.5 },
+
+    { name: "Leeuwarden", province: "Friesland", x: 262.7, y: 141.1 },
+    { name: "Drachten",   province: "Friesland", x: 319.3, y: 170.7 },
+    { name: "Sneek",      province: "Friesland", x: 240.3, y: 190.4 },
+    { name: "Heerenveen", province: "Friesland", x: 286.5, y: 212.4 },
+
+    { name: "Assen",      province: "Drenthe",   x: 401.2, y: 201.0 },
+    { name: "Emmen",      province: "Drenthe",   x: 462.8, y: 265.2 },
+    { name: "Hoogeveen",  province: "Drenthe",   x: 385.7, y: 281.7 },
+    { name: "Meppel",     province: "Drenthe",   x: 335.7, y: 290.2 },
+  ];
+
+  const PROVINCES = [...new Set(PLACES.map(p => p.province))].sort();
+
+  // ======= UI =======
+  const canvas = document.getElementById("map");
+  const ctx = canvas.getContext("2d");
+
+  const promptEl = document.getElementById("prompt");
+  const feedbackEl = document.getElementById("feedback");
+  const goodEl = document.getElementById("good");
+  const badEl = document.getElementById("bad");
+  const totalEl = document.getElementById("total");
+  const activeCountEl = document.getElementById("activeCount");
+
+  const mode1Btn = document.getElementById("mode1");
+  const mode2Btn = document.getElementById("mode2");
+  const typingArea = document.getElementById("typingArea");
+  const answerInput = document.getElementById("answer");
+  const checkBtn = document.getElementById("check");
+  const skipBtn = document.getElementById("skip");
+
+  const nextBtn = document.getElementById("next");
+  const resetBtn = document.getElementById("reset");
+
+  const provinceListEl = document.getElementById("provinceList");
+  const selectAllBtn = document.getElementById("selectAll");
+  const selectNoneBtn = document.getElementById("selectNone");
+  const startTestBtn = document.getElementById("startTest");
+
+  // ======= STATE =======
+  let mode = 1;
+  let current = null;
+  let scoreGood = 0, scoreBad = 0, scoreTotal = 0;
+
+  let selectedProvinces = loadSelectedProvinces();
+  let activePlaces = [];
+  let deck = [];
+
+  // ======= IMAGE =======
+  const img = new Image();
+  img.src = MAP_IMAGE;
+  img.onload = () => {
+    buildProvinceUI();
+    recomputeActivePlaces();
+    draw();
+    // start pas als er selectie is
+    promptEl.textContent = "Selecteer provincies en druk op Start toets.";
+  };
+
+  // ======= STORAGE =======
+  function loadSelectedProvinces() {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (!raw) return new Set(PROVINCES); // default: alles
+      const arr = JSON.parse(raw);
+      return new Set(arr.filter(x => PROVINCES.includes(x)));
+    } catch {
+      return new Set(PROVINCES);
+    }
+  }
+  function saveSelectedProvinces() {
+    localStorage.setItem(LS_KEY, JSON.stringify([...selectedProvinces]));
+  }
+
+  // ======= PROVINCE UI =======
+  function buildProvinceUI() {
+    provinceListEl.innerHTML = "";
+    for (const prov of PROVINCES) {
+      const row = document.createElement("label");
+      row.className = "chk";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = selectedProvinces.has(prov);
+      cb.addEventListener("change", () => {
+        if (cb.checked) selectedProvinces.add(prov);
+        else selectedProvinces.delete(prov);
+        saveSelectedProvinces();
+        recomputeActivePlaces(false);
+      });
+      const span = document.createElement("span");
+      span.textContent = prov;
+      row.appendChild(cb);
+      row.appendChild(span);
+      provinceListEl.appendChild(row);
+    }
+  }
+
+  selectAllBtn.addEventListener("click", () => {
+    selectedProvinces = new Set(PROVINCES);
+    saveSelectedProvinces();
+    buildProvinceUI();
+    recomputeActivePlaces(false);
+  });
+  selectNoneBtn.addEventListener("click", () => {
+    selectedProvinces = new Set();
+    saveSelectedProvinces();
+    buildProvinceUI();
+    recomputeActivePlaces(false);
+  });
+
+  function recomputeActivePlaces(clearDeck = true) {
+    activePlaces = PLACES.filter(p => selectedProvinces.has(p.province));
+    activeCountEl.textContent = `${activePlaces.length} plaatsen`;
+    startTestBtn.disabled = activePlaces.length === 0;
+    if (clearDeck) deck = [];
+    draw();
+  }
+
+  startTestBtn.addEventListener("click", () => {
+    if (activePlaces.length === 0) return;
+    deck = [];
+    newRound();
+  });
+
+  // ======= DECK =======
+  function shuffle(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+  }
+  function nextPlace() {
+    if (deck.length === 0) deck = shuffle([...activePlaces]);
+    return deck.pop();
+  }
+
+  // ======= HELPERS =======
+  function updateScore() {
+    goodEl.textContent = scoreGood;
+    badEl.textContent = scoreBad;
+    totalEl.textContent = scoreTotal;
+  }
+  function setFeedback(text, ok) {
+    feedbackEl.textContent = text || "";
+    feedbackEl.className = "feedback " + (ok === true ? "good" : ok === false ? "bad" : "");
+  }
+  function normalize(s) {
+    return (s || "").trim().toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+  }
+  function levenshtein(a, b) {
+    a = normalize(a); b = normalize(b);
+    const m = a.length, n = b.length;
+    const dp = Array.from({length:m+1}, () => Array(n+1).fill(0));
+    for (let i=0;i<=m;i++) dp[i][0]=i;
+    for (let j=0;j<=n;j++) dp[0][j]=j;
+    for (let i=1;i<=m;i++){
+      for (let j=1;j<=n;j++){
+        const cost = a[i-1]===b[j-1] ? 0 : 1;
+        dp[i][j] = Math.min(dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1]+cost);
+      }
+    }
+    return dp[m][n];
+  }
+  function isCloseAnswer(input, target) {
+    const a = normalize(input), t = normalize(target);
+    if (!a) return false;
+    if (a === t) return true;
+    const d = levenshtein(a, t);
+    const allowed = t.length <= 6 ? 1 : 2;
+    return d <= allowed;
+  }
+  function fromClientToImageCoords(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    const x = (clientX - rect.left) * (canvas.width / rect.width);
+    const y = (clientY - rect.top) * (canvas.height / rect.height);
+    return { x, y };
+  }
+  function nearestPlace(x, y) {
+    let best = null, bestDist = Infinity;
+    for (const p of activePlaces) {
+      const d = Math.hypot(x - p.x, y - p.y);
+      if (d < bestDist) { bestDist = d; best = p; }
+    }
+    return { place: best, dist: bestDist };
+  }
+
+  // ======= DRAW =======
+  function draw() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.drawImage(img, 0,0,canvas.width,canvas.height);
+
+    if (SHOW_ALL_DOTS) {
+      for (const p of activePlaces) {
+        ctx.beginPath();
+        ctx.fillStyle = "rgba(0,0,0,0.35)";
+        ctx.arc(p.x, p.y, 6, 0, Math.PI*2);
+        ctx.fill();
+      }
+    }
+    if (current && mode === 2) {
+      ctx.beginPath();
+      ctx.strokeStyle = "rgba(255,0,0,0.90)";
+      ctx.lineWidth = 4;
+      ctx.arc(current.x, current.y, 16, 0, Math.PI*2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.fillStyle = "rgba(255,0,0,0.90)";
+      ctx.arc(current.x, current.y, 6, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  // ======= GAME =======
+  function newRound() {
+    if (activePlaces.length === 0) {
+      promptEl.textContent = "Selecteer provincies en druk op Start toets.";
+      return;
+    }
+    current = nextPlace();
+    setFeedback("", null);
+
+    if (mode === 1) {
+      promptEl.textContent = `Klik op: ${current.name}`;
+      typingArea.style.display = "none";
+    } else {
+      promptEl.textContent = `Welke plaats is dit? (typ de naam)`;
+      typingArea.style.display = "flex";
+      answerInput.value = "";
+      answerInput.focus();
+    }
+    draw();
+  }
+
+  function setMode(m) {
+    mode = m;
+    if (mode === 1) {
+      mode1Btn.classList.add("primary");
+      mode2Btn.classList.remove("primary");
+    } else {
+      mode2Btn.classList.add("primary");
+      mode1Btn.classList.remove("primary");
+    }
+    if (current) newRound();
+  }
+
+  mode1Btn.addEventListener("click", () => setMode(1));
+  mode2Btn.addEventListener("click", () => setMode(2));
+  nextBtn.addEventListener("click", () => newRound());
+
+  resetBtn.addEventListener("click", () => {
+    scoreGood = scoreBad = scoreTotal = 0;
+    deck = [];
+    updateScore();
+    setFeedback("", null);
+    current = null;
+    draw();
+    promptEl.textContent = "Selecteer provincies en druk op Start toets.";
+  });
+
+  canvas.addEventListener("click", (e) => {
+    if (mode !== 1 || !current) return;
+    const { x, y } = fromClientToImageCoords(e.clientX, e.clientY);
+    const { place, dist } = nearestPlace(x, y);
+    if (!place || dist > HIT_RADIUS_PX) {
+      setFeedback("Klik iets dichter bij een stip 🙂", false);
+      return;
+    }
+    scoreTotal++;
+    if (place.name === current.name) {
+      scoreGood++;
+      setFeedback("✅ Goed!", true);
+      updateScore();
+      setTimeout(newRound, 500);
+    } else {
+      scoreBad++;
+      setFeedback(`❌ Fout. Dat was ${place.name}. (Goed: ${current.name})`, false);
+      updateScore();
+      setTimeout(newRound, 800);
+    }
+  });
+
+  function checkTyped() {
+    if (mode !== 2 || !current) return;
+    scoreTotal++;
+    const ok = isCloseAnswer(answerInput.value, current.name);
+    if (ok) {
+      scoreGood++;
+      setFeedback("✅ Goed!", true);
+    } else {
+      scoreBad++;
+      setFeedback(`❌ Fout. Goed was: ${current.name}.`, false);
+    }
+    updateScore();
+    setTimeout(newRound, ok ? 500 : 900);
+  }
+  function skipTyped() {
+    if (mode !== 2 || !current) return;
+    setFeedback(`⏭️ Overgeslagen. Dit was: ${current.name}.`, false);
+    setTimeout(newRound, 900);
+  }
+
+  checkBtn.addEventListener("click", checkTyped);
+  skipBtn.addEventListener("click", skipTyped);
+  answerInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") checkTyped();
+  });
+
+})();
+</script>
+</body>
+</html>
