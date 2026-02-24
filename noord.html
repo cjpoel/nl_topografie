@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Topografie – Provincies kiezen</title>
+  <title>Topografie – Noord-Nederland</title>
   <style>
     :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
     body { margin: 0; background: #f6f7fb; color: #111; }
@@ -17,7 +17,7 @@
       background: #fff; border-radius: 14px; padding: 12px;
       box-shadow: 0 6px 18px rgba(0,0,0,.06);
     }
-    canvas { width: 100%; height: auto; border-radius: 14px; background:#e9ecf6; }
+    canvas { width: 100%; height: auto; border-radius: 14px; background:#e9ecf6; touch-action: manipulation; }
 
     .row { display:flex; flex-wrap: wrap; gap: 10px; align-items:center; }
     .col { display:grid; gap: 10px; }
@@ -38,24 +38,27 @@
     .pill { background:#f2f4fa; border:1px solid #e3e7f5; padding:6px 10px; border-radius:999px; font-size:13px; }
 
     .small { font-size: 12px; color:#444; line-height:1.4; }
-
     .divider { height:1px; background:#eef1fb; margin:10px 0; }
 
     .chklist { display:grid; gap:8px; }
     .chk { display:flex; gap:8px; align-items:center; }
     .chk input { transform: scale(1.1); }
     .tag { font-size: 12px; padding: 2px 8px; border-radius: 999px; background:#f2f4fa; border:1px solid #e3e7f5; }
+
+    a { color:#111; }
   </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Topografie – kies provincies</h1>
+  <h1>Topografie – Noord-Nederland (kies provincies)</h1>
 
   <div class="grid">
     <div class="card">
       <canvas id="map" width="608" height="425"></canvas>
       <div class="small" style="margin-top:10px;">
-        Tip: zet dit daarna op het beginscherm van de iPad. Selectie wordt onthouden.
+        <a href="index.html">← terug naar menu</a>
+        <span> • </span>
+        Tip: voeg dit toe aan het beginscherm van de iPad. Selectie wordt onthouden.
       </div>
     </div>
 
@@ -79,13 +82,15 @@
         <div class="pill">Goed: <span id="good">0</span></div>
         <div class="pill">Fout: <span id="bad">0</span></div>
         <div class="pill">Totaal: <span id="total">0</span></div>
+        <div class="pill">Reeks: <span id="streak">0</span></div>
       </div>
 
       <div class="divider"></div>
 
       <div class="row">
         <button id="next" class="primary">Volgende</button>
-        <button id="reset">Reset score</button>
+        <button id="repeatWrong">Oefen foutjes</button>
+        <button id="reset">Reset</button>
       </div>
 
       <div class="divider"></div>
@@ -101,9 +106,10 @@
           <button id="selectNone">Niets</button>
           <button id="startTest" class="primary">Start toets</button>
         </div>
-        <div class="small" style="margin-top:10px;">
-          Vanavond vullen we hier de 3 nieuwe provincies + plaatsen in en vervangen we de kaart.
-        </div>
+      </div>
+
+      <div class="small" style="margin-top:10px;">
+        Bestanden: <code>noord.html</code> + <code>noordnederland_schoon2.png</code>
       </div>
     </div>
   </div>
@@ -112,12 +118,20 @@
 <script>
 (() => {
   // ======= CONFIG =======
-  const MAP_IMAGE = "noordnederland_schoon2.png"; // vanavond vervangen door nieuwe kaart
-  const HIT_RADIUS_PX = 16;
+  const MAP_IMAGE = "noordnederland_schoon2.png";
   const SHOW_ALL_DOTS = true;
   const LS_KEY = "topo_selected_provinces_v1";
 
-  // ======= DATA (nu: huidige set; vanavond uitbreiden) =======
+  // “Voelt” overal hetzelfde (scherm-pixels)
+  const DOT_SCREEN_PX = 14;   // diameter stip op scherm
+  const RING_SCREEN_PX = 34;  // diameter ring op scherm
+  const HIT_SCREEN_PX  = 40;  // klikmarge op scherm
+
+  // Auto door na antwoord
+  const DELAY_GOOD_MS = 450;
+  const DELAY_BAD_MS  = 900;
+
+  // ======= DATA =======
   const PLACES = [
     { name: "Delfzijl",   province: "Groningen", x: 464.7, y: 101.8 },
     { name: "Groningen",  province: "Groningen", x: 402.3, y: 135.2 },
@@ -145,6 +159,7 @@
   const goodEl = document.getElementById("good");
   const badEl = document.getElementById("bad");
   const totalEl = document.getElementById("total");
+  const streakEl = document.getElementById("streak");
   const activeCountEl = document.getElementById("activeCount");
 
   const mode1Btn = document.getElementById("mode1");
@@ -156,6 +171,7 @@
 
   const nextBtn = document.getElementById("next");
   const resetBtn = document.getElementById("reset");
+  const repeatWrongBtn = document.getElementById("repeatWrong");
 
   const provinceListEl = document.getElementById("provinceList");
   const selectAllBtn = document.getElementById("selectAll");
@@ -166,27 +182,49 @@
   let mode = 1;
   let current = null;
   let scoreGood = 0, scoreBad = 0, scoreTotal = 0;
+  let streak = 0;
 
   let selectedProvinces = loadSelectedProvinces();
   let activePlaces = [];
   let deck = [];
+  let wrongPile = [];
 
-  // ======= IMAGE =======
+  // ======= IMAGE (cache-buster) =======
   const img = new Image();
-  img.src = MAP_IMAGE;
+  img.src = addCacheBuster(MAP_IMAGE);
   img.onload = () => {
     buildProvinceUI();
     recomputeActivePlaces();
     draw();
-    // start pas als er selectie is
     promptEl.textContent = "Selecteer provincies en druk op Start toets.";
   };
+
+  // ======= CACHE BUSTER =======
+  function addCacheBuster(url) {
+    const v = "v=20260224";
+    return url + (url.includes("?") ? "&" : "?") + v;
+  }
+
+  // ======= SCALE HELPERS =======
+  function screenScale() {
+    const rect = canvas.getBoundingClientRect();
+    return rect.width / canvas.width; // schermpx per canvaspx
+  }
+  function dotRadiusCanvasPx() {
+    return Math.max(3, (DOT_SCREEN_PX / 2) / screenScale());
+  }
+  function ringRadiusCanvasPx() {
+    return Math.max(10, (RING_SCREEN_PX / 2) / screenScale());
+  }
+  function hitRadiusCanvasPx() {
+    return Math.max(10, (HIT_SCREEN_PX / 2) / screenScale());
+  }
 
   // ======= STORAGE =======
   function loadSelectedProvinces() {
     try {
       const raw = localStorage.getItem(LS_KEY);
-      if (!raw) return new Set(PROVINCES); // default: alles
+      if (!raw) return new Set(PROVINCES);
       const arr = JSON.parse(raw);
       return new Set(arr.filter(x => PROVINCES.includes(x)));
     } catch {
@@ -244,6 +282,7 @@
   startTestBtn.addEventListener("click", () => {
     if (activePlaces.length === 0) return;
     deck = [];
+    wrongPile = [];
     newRound();
   });
 
@@ -265,6 +304,7 @@
     goodEl.textContent = scoreGood;
     badEl.textContent = scoreBad;
     totalEl.textContent = scoreTotal;
+    streakEl.textContent = streak;
   }
   function setFeedback(text, ok) {
     feedbackEl.textContent = text || "";
@@ -311,28 +351,36 @@
   }
 
   // ======= DRAW =======
+  function drawDot(x, y, r, style) {
+    ctx.beginPath();
+    ctx.fillStyle = style;
+    ctx.arc(x, y, r, 0, Math.PI*2);
+    ctx.fill();
+  }
+  function drawRing(x, y, r, style) {
+    ctx.beginPath();
+    ctx.strokeStyle = style;
+    ctx.lineWidth = Math.max(2, 4 / screenScale());
+    ctx.arc(x, y, r, 0, Math.PI*2);
+    ctx.stroke();
+  }
+
   function draw() {
     ctx.clearRect(0,0,canvas.width,canvas.height);
     ctx.drawImage(img, 0,0,canvas.width,canvas.height);
 
+    const DOT_R = dotRadiusCanvasPx();
+
     if (SHOW_ALL_DOTS) {
       for (const p of activePlaces) {
-        ctx.beginPath();
-        ctx.fillStyle = "rgba(0,0,0,0.35)";
-        ctx.arc(p.x, p.y, 6, 0, Math.PI*2);
-        ctx.fill();
+        drawDot(p.x, p.y, DOT_R, "rgba(0,0,0,0.35)");
       }
     }
+
     if (current && mode === 2) {
-      ctx.beginPath();
-      ctx.strokeStyle = "rgba(255,0,0,0.90)";
-      ctx.lineWidth = 4;
-      ctx.arc(current.x, current.y, 16, 0, Math.PI*2);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.fillStyle = "rgba(255,0,0,0.90)";
-      ctx.arc(current.x, current.y, 6, 0, Math.PI*2);
-      ctx.fill();
+      const RING_R = ringRadiusCanvasPx();
+      drawRing(current.x, current.y, RING_R, "rgba(255,0,0,0.90)");
+      drawDot(current.x, current.y, DOT_R, "rgba(255,0,0,0.90)");
     }
   }
 
@@ -373,9 +421,22 @@
   mode2Btn.addEventListener("click", () => setMode(2));
   nextBtn.addEventListener("click", () => newRound());
 
+  repeatWrongBtn.addEventListener("click", () => {
+    if (wrongPile.length === 0) {
+      setFeedback("Geen foutjes om te oefenen 🙂", true);
+      return;
+    }
+    deck = shuffle([...wrongPile]);
+    wrongPile = [];
+    setFeedback("Oefen foutjes!", true);
+    newRound();
+  });
+
   resetBtn.addEventListener("click", () => {
     scoreGood = scoreBad = scoreTotal = 0;
+    streak = 0;
     deck = [];
+    wrongPile = [];
     updateScore();
     setFeedback("", null);
     current = null;
@@ -383,46 +444,66 @@
     promptEl.textContent = "Selecteer provincies en druk op Start toets.";
   });
 
-  canvas.addEventListener("click", (e) => {
+  // ======= ANSWERS (pointer events: iPad vriendelijk) =======
+  canvas.addEventListener("pointerup", (e) => {
     if (mode !== 1 || !current) return;
+    e.preventDefault();
+
     const { x, y } = fromClientToImageCoords(e.clientX, e.clientY);
     const { place, dist } = nearestPlace(x, y);
-    if (!place || dist > HIT_RADIUS_PX) {
+
+    if (!place || dist > hitRadiusCanvasPx()) {
       setFeedback("Klik iets dichter bij een stip 🙂", false);
+      streak = 0;
+      updateScore();
       return;
     }
+
     scoreTotal++;
+
     if (place.name === current.name) {
       scoreGood++;
+      streak++;
       setFeedback("✅ Goed!", true);
       updateScore();
-      setTimeout(newRound, 500);
+      setTimeout(newRound, DELAY_GOOD_MS);
     } else {
       scoreBad++;
+      streak = 0;
+      wrongPile.push(current);
       setFeedback(`❌ Fout. Dat was ${place.name}. (Goed: ${current.name})`, false);
       updateScore();
-      setTimeout(newRound, 800);
+      setTimeout(newRound, DELAY_BAD_MS);
     }
-  });
+  }, { passive:false });
 
   function checkTyped() {
     if (mode !== 2 || !current) return;
     scoreTotal++;
     const ok = isCloseAnswer(answerInput.value, current.name);
+
     if (ok) {
       scoreGood++;
+      streak++;
       setFeedback("✅ Goed!", true);
+      updateScore();
+      setTimeout(newRound, DELAY_GOOD_MS);
     } else {
       scoreBad++;
+      streak = 0;
+      wrongPile.push(current);
       setFeedback(`❌ Fout. Goed was: ${current.name}.`, false);
+      updateScore();
+      setTimeout(newRound, DELAY_BAD_MS);
     }
-    updateScore();
-    setTimeout(newRound, ok ? 500 : 900);
   }
   function skipTyped() {
     if (mode !== 2 || !current) return;
+    streak = 0;
+    wrongPile.push(current);
     setFeedback(`⏭️ Overgeslagen. Dit was: ${current.name}.`, false);
-    setTimeout(newRound, 900);
+    updateScore();
+    setTimeout(newRound, DELAY_BAD_MS);
   }
 
   checkBtn.addEventListener("click", checkTyped);
@@ -431,6 +512,8 @@
     if (e.key === "Enter") checkTyped();
   });
 
+  // redraw bij resize zodat de “scherm-gevoel” radii perfect blijven
+  window.addEventListener("resize", () => { if (img.complete) draw(); });
 })();
 </script>
 </body>
