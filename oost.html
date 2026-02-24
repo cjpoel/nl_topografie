@@ -7,67 +7,71 @@
   <style>
     :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
     body { margin: 0; background: #f6f7fb; color: #111; }
-    .wrap { max-width: 980px; margin: 0 auto; padding: 16px; }
-    h1 { font-size: 20px; margin: 0 0 12px; }
-    .row { display: grid; grid-template-columns: 1fr; gap: 12px; }
-    @media (min-width: 900px) { .row { grid-template-columns: 2fr 1fr; } }
+    .wrap { max-width: 1050px; margin: 0 auto; padding: 16px; }
+    h1 { font-size: 20px; margin: 0 0 10px; }
+
+    .grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+    @media (min-width: 900px) { .grid { grid-template-columns: 2fr 1fr; } }
 
     .card {
       background: #fff; border-radius: 14px; padding: 12px;
       box-shadow: 0 6px 18px rgba(0,0,0,.06);
     }
+    canvas { width: 100%; height: auto; border-radius: 14px; background:#e9ecf6; touch-action: manipulation; }
 
-    .controls { display: grid; gap: 10px; }
-    .controls .mode { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .row { display:flex; flex-wrap: wrap; gap: 10px; align-items:center; }
+    .col { display:grid; gap: 10px; }
+
     button, input[type="text"] {
       font-size: 14px; padding: 10px 12px; border-radius: 10px; border: 1px solid #d7dbe7;
       background: #fff;
     }
-    button { cursor: pointer; }
-    button.primary { background: #111; color: #fff; border-color: #111; }
-    button:disabled { opacity: .55; cursor: not-allowed; }
+    button { cursor:pointer; }
+    button.primary { background:#111; color:#fff; border-color:#111; }
+    button:disabled { opacity:.6; cursor:not-allowed; }
 
-    .prompt {
-      font-size: 16px; padding: 10px 12px; border-radius: 12px;
-      background: #f1f3ff; border: 1px solid #dfe3ff;
-    }
+    .prompt { font-size: 16px; padding: 10px 12px; border-radius: 12px; background:#f1f3ff; border: 1px solid #dfe3ff; }
     .feedback { font-weight: 700; min-height: 22px; }
-    .good { color: #0a7a2f; }
-    .bad { color: #b00020; }
+    .good { color:#0a7a2f; }
+    .bad { color:#b00020; }
 
-    .stats { display: flex; gap: 10px; flex-wrap: wrap; }
-    .pill { background: #f2f4fa; border: 1px solid #e3e7f5; padding: 6px 10px; border-radius: 999px; font-size: 13px; }
-    .hr { height: 1px; background: #eef1fb; margin: 10px 0; }
-    .small { font-size: 12px; color: #444; line-height: 1.4; }
+    .stats { display:flex; gap:10px; flex-wrap: wrap; }
+    .pill { background:#f2f4fa; border:1px solid #e3e7f5; padding:6px 10px; border-radius:999px; font-size:13px; }
 
-    canvas { width: 100%; height: auto; border-radius: 14px; background: #e9ecf6; touch-action: manipulation; }
-    #typingArea { display:none; gap:8px; align-items:center; flex-wrap:wrap; }
+    .small { font-size: 12px; color:#444; line-height:1.4; }
+    .divider { height:1px; background:#eef1fb; margin:10px 0; }
+
+    .chklist { display:grid; gap:8px; }
+    .chk { display:flex; gap:8px; align-items:center; }
+    .chk input { transform: scale(1.1); }
+    .tag { font-size: 12px; padding: 2px 8px; border-radius: 999px; background:#f2f4fa; border:1px solid #e3e7f5; }
+
     a { color:#111; }
   </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Topografie – Oost-Nederland (Flevoland • Overijssel • Gelderland)</h1>
+  <h1>Topografie – Oost-Nederland (kies provincies)</h1>
 
-  <div class="row">
+  <div class="grid">
     <div class="card">
       <canvas id="map" width="1800" height="1260"></canvas>
       <div class="small" style="margin-top:10px;">
         <a href="index.html">← terug naar menu</a>
         <span> • </span>
-        Modus 1: klik dicht bij de juiste stip. Modus 2: typ de naam.
+        Tip: selectie wordt onthouden.
       </div>
     </div>
 
-    <div class="card controls">
-      <div class="mode">
+    <div class="card col">
+      <div class="row">
         <button id="mode1" class="primary">Modus 1: klik</button>
         <button id="mode2">Modus 2: typ</button>
       </div>
 
-      <div class="prompt" id="prompt">Laden…</div>
+      <div class="prompt" id="prompt">Selecteer provincies en druk op Start toets.</div>
 
-      <div id="typingArea">
+      <div id="typingArea" class="row" style="display:none;">
         <input id="answer" type="text" placeholder="Typ de plaatsnaam…" autocomplete="off" />
         <button id="check" class="primary">Controleer</button>
         <button id="skip">Sla over</button>
@@ -82,13 +86,29 @@
         <div class="pill">Reeks: <span id="streak">0</span></div>
       </div>
 
-      <div class="hr"></div>
+      <div class="divider"></div>
 
-      <button id="next" class="primary">Volgende</button>
-      <button id="repeatWrong">Oefen foutjes</button>
-      <button id="reset">Reset</button>
+      <div class="row">
+        <button id="next" class="primary">Volgende</button>
+        <button id="repeatWrong">Oefen foutjes</button>
+        <button id="reset">Reset</button>
+      </div>
 
-      <div class="small">
+      <div class="divider"></div>
+
+      <div>
+        <div class="row" style="justify-content:space-between;">
+          <b>Provincies in toets</b>
+          <span class="tag" id="activeCount">0 plaatsen</span>
+        </div>
+        <div class="chklist" id="provinceList"></div>
+        <div class="row" style="margin-top:10px;">
+          <button id="selectAll">Alles</button>
+          <button id="startTest" class="primary">Start toets</button>
+        </div>
+      </div>
+
+      <div class="small" style="margin-top:10px;">
         Bestanden: <code>oost.html</code> + <code>oost_schoon4.png</code>
       </div>
     </div>
@@ -101,36 +121,45 @@
   const MAP_IMAGE = "oost_schoon4.png";
   const SHOW_ALL_DOTS = true;
 
+  // cache-buster: verhoog dit getal als je de PNG vervangt
+  const ASSET_VERSION = "20260224-1";
+
+  // “Voelt” overal hetzelfde (scherm-pixels)
   const DOT_SCREEN_PX = 14;
   const RING_SCREEN_PX = 34;
   const HIT_SCREEN_PX  = 40;
 
-  const DELAY_GOOD_MS = 800;
-  const DELAY_BAD_MS  = 1200;
+  // Auto door na antwoord (pas gerust aan)
+  const DELAY_GOOD_MS = 900;
+  const DELAY_BAD_MS  = 1600;
+
+  const LS_KEY = "topo_selected_provinces_oost_v1";
 
   // ======= DATA =======
   const PLACES = [
     // Flevoland
-    { name: "Emmeloord", x: 502.5,  y: 106.5 },
-    { name: "Lelystad",  x: 244.5,  y: 380.5 },
-    { name: "Almere",    x: 88.5,   y: 588.5 },
+    { name: "Emmeloord", province: "Flevoland", x: 502.5,  y: 106.5 },
+    { name: "Lelystad",  province: "Flevoland", x: 244.5,  y: 380.5 },
+    { name: "Almere",    province: "Flevoland", x: 88.5,   y: 588.5 },
 
     // Overijssel
-    { name: "Kampen",    x: 630.6,  y: 306.5 },
-    { name: "Zwolle",    x: 772.5,  y: 360.5 },
-    { name: "Deventer",  x: 828.5,  y: 690.5 },
-    { name: "Almelo",    x: 1216.6, y: 560.5 },
-    { name: "Hengelo",   x: 1320.6, y: 676.5 },
-    { name: "Enschede",  x: 1400.6, y: 738.5 },
+    { name: "Kampen",    province: "Overijssel", x: 630.6,  y: 306.5 },
+    { name: "Zwolle",    province: "Overijssel", x: 772.5,  y: 360.5 },
+    { name: "Deventer",  province: "Overijssel", x: 828.5,  y: 690.5 },
+    { name: "Almelo",    province: "Overijssel", x: 1216.6, y: 560.5 },
+    { name: "Hengelo",   province: "Overijssel", x: 1320.6, y: 676.5 },
+    { name: "Enschede",  province: "Overijssel", x: 1400.6, y: 738.5 },
 
     // Gelderland
-    { name: "Apeldoorn",  x: 674.5,  y: 748.5 },
-    { name: "Zutphen",    x: 856.5,  y: 840.5 },
-    { name: "Arnhem",     x: 924.5,  y: 1060.5 },
-    { name: "Wageningen", x: 438.5,  y: 1054.5 },
-    { name: "Doetinchem", x: 630.5,  y: 1040.5 },
-    { name: "Nijmegen",   x: 584.5,  y: 1216.5 },
+    { name: "Apeldoorn",  province: "Gelderland", x: 674.5,  y: 748.5 },
+    { name: "Zutphen",    province: "Gelderland", x: 856.5,  y: 840.5 },
+    { name: "Arnhem",     province: "Gelderland", x: 924.5,  y: 1060.5 },
+    { name: "Wageningen", province: "Gelderland", x: 438.5,  y: 1054.5 },
+    { name: "Doetinchem", province: "Gelderland", x: 630.5,  y: 1040.5 },
+    { name: "Nijmegen",   province: "Gelderland", x: 584.5,  y: 1216.5 },
   ];
+
+  const PROVINCES = [...new Set(PLACES.map(p => p.province))].sort();
 
   // ======= UI =======
   const canvas = document.getElementById("map");
@@ -142,6 +171,7 @@
   const badEl = document.getElementById("bad");
   const totalEl = document.getElementById("total");
   const streakEl = document.getElementById("streak");
+  const activeCountEl = document.getElementById("activeCount");
 
   const mode1Btn = document.getElementById("mode1");
   const mode2Btn = document.getElementById("mode2");
@@ -155,50 +185,114 @@
   const resetBtn = document.getElementById("reset");
   const repeatWrongBtn = document.getElementById("repeatWrong");
 
+  const provinceListEl = document.getElementById("provinceList");
+  const selectAllBtn = document.getElementById("selectAll");
+  const startTestBtn = document.getElementById("startTest");
+
   // ======= STATE =======
   let mode = 1;
   let current = null;
+
   let scoreGood = 0, scoreBad = 0, scoreTotal = 0;
   let streak = 0;
 
+  let selectedProvinces = loadSelectedProvinces();
+  let activePlaces = [];
   let deck = [];
   let wrongPile = [];
 
-  // ======= IMAGE (cache-buster) =======
+  // ======= IMAGE =======
   const img = new Image();
-  img.src = addCacheBuster(MAP_IMAGE);
-  img.onload = () => { draw(); newRound(); };
-
-  function addCacheBuster(url) {
-    const v = "v=20260224";
-    return url + (url.includes("?") ? "&" : "?") + v;
-  }
+  img.src = `${MAP_IMAGE}?v=${encodeURIComponent(ASSET_VERSION)}`;
+  img.onload = () => {
+    buildProvinceUI();
+    recomputeActivePlaces();
+    draw();
+    promptEl.textContent = "Selecteer provincies en druk op Start toets.";
+  };
 
   // ======= SCALE HELPERS =======
   function screenScale() {
     const rect = canvas.getBoundingClientRect();
     return rect.width / canvas.width;
   }
-  function dotRadiusCanvasPx() {
-    return Math.max(3, (DOT_SCREEN_PX / 2) / screenScale());
+  function dotRadiusCanvasPx() { return Math.max(3, (DOT_SCREEN_PX/2) / screenScale()); }
+  function ringRadiusCanvasPx() { return Math.max(10, (RING_SCREEN_PX/2) / screenScale()); }
+  function hitRadiusCanvasPx() { return Math.max(10, (HIT_SCREEN_PX/2) / screenScale()); }
+
+  // ======= STORAGE =======
+  function loadSelectedProvinces() {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (!raw) return new Set(PROVINCES); // default: alles
+      const arr = JSON.parse(raw);
+      return new Set(arr.filter(x => PROVINCES.includes(x)));
+    } catch {
+      return new Set(PROVINCES);
+    }
   }
-  function ringRadiusCanvasPx() {
-    return Math.max(10, (RING_SCREEN_PX / 2) / screenScale());
+  function saveSelectedProvinces() {
+    localStorage.setItem(LS_KEY, JSON.stringify([...selectedProvinces]));
   }
-  function hitRadiusCanvasPx() {
-    return Math.max(10, (HIT_SCREEN_PX / 2) / screenScale());
+
+  // ======= PROVINCE UI =======
+  function buildProvinceUI() {
+    provinceListEl.innerHTML = "";
+    for (const prov of PROVINCES) {
+      const row = document.createElement("label");
+      row.className = "chk";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = selectedProvinces.has(prov);
+      cb.addEventListener("change", () => {
+        if (cb.checked) selectedProvinces.add(prov);
+        else selectedProvinces.delete(prov);
+        saveSelectedProvinces();
+        recomputeActivePlaces(false);
+      });
+      const span = document.createElement("span");
+      span.textContent = prov;
+      row.appendChild(cb);
+      row.appendChild(span);
+      provinceListEl.appendChild(row);
+    }
   }
+
+  selectAllBtn.addEventListener("click", () => {
+    selectedProvinces = new Set(PROVINCES);
+    saveSelectedProvinces();
+    buildProvinceUI();
+    recomputeActivePlaces(false);
+  });
+
+  function recomputeActivePlaces(clearDeck = true) {
+    activePlaces = PLACES.filter(p => selectedProvinces.has(p.province));
+    activeCountEl.textContent = `${activePlaces.length} plaatsen`;
+    startTestBtn.disabled = activePlaces.length === 0;
+    if (clearDeck) deck = [];
+    draw();
+  }
+
+  startTestBtn.addEventListener("click", () => {
+    if (activePlaces.length === 0) return;
+    deck = [];
+    wrongPile = [];
+    current = null;
+    setFeedback("", null);
+    promptEl.textContent = "Start!";
+    newRound();
+  });
 
   // ======= DECK =======
   function shuffle(a) {
-    for (let i = a.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [a[i], a[j]] = [a[j], a[i]];
+    for (let i=a.length-1;i>0;i--){
+      const j = Math.floor(Math.random()*(i+1));
+      [a[i],a[j]]=[a[j],a[i]];
     }
     return a;
   }
   function nextPlace() {
-    if (deck.length === 0) deck = shuffle([...PLACES]);
+    if (deck.length === 0) deck = shuffle([...activePlaces]);
     return deck.pop();
   }
 
@@ -209,39 +303,34 @@
     totalEl.textContent = scoreTotal;
     streakEl.textContent = streak;
   }
-  function normalize(s) {
-    return (s || "")
-      .trim()
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/\p{Diacritic}/gu, "");
+  function setFeedback(text, ok) {
+    feedbackEl.textContent = text || "";
+    feedbackEl.className = "feedback " + (ok === true ? "good" : ok === false ? "bad" : "");
   }
-  function levenshtein(a, b) {
-    a = normalize(a); b = normalize(b);
-    const m = a.length, n = b.length;
-    const dp = Array.from({length: m+1}, () => Array(n+1).fill(0));
-    for (let i=0;i<=m;i++) dp[i][0]=i;
-    for (let j=0;j<=n;j++) dp[0][j]=j;
-    for (let i=1;i<=m;i++){
-      for (let j=1;j<=n;j++){
-        const cost = a[i-1]===b[j-1] ? 0 : 1;
-        dp[i][j] = Math.min(dp[i-1][j] + 1, dp[i][j-1] + 1, dp[i-1][j-1] + cost);
+  function normalize(s) {
+    return (s||"").trim().toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu,"");
+  }
+  function levenshtein(a,b){
+    a=normalize(a); b=normalize(b);
+    const m=a.length,n=b.length;
+    const dp=Array.from({length:m+1},()=>Array(n+1).fill(0));
+    for(let i=0;i<=m;i++) dp[i][0]=i;
+    for(let j=0;j<=n;j++) dp[0][j]=j;
+    for(let i=1;i<=m;i++){
+      for(let j=1;j<=n;j++){
+        const cost=a[i-1]===b[j-1]?0:1;
+        dp[i][j]=Math.min(dp[i-1][j]+1,dp[i][j-1]+1,dp[i-1][j-1]+cost);
       }
     }
     return dp[m][n];
   }
-  function isCloseAnswer(input, target) {
-    const a = normalize(input);
-    const t = normalize(target);
-    if (!a) return false;
-    if (a === t) return true;
-    const d = levenshtein(a, t);
-    const allowed = t.length <= 6 ? 1 : 2;
-    return d <= allowed;
-  }
-  function setFeedback(text, ok) {
-    feedbackEl.textContent = text || "";
-    feedbackEl.className = "feedback " + (ok === true ? "good" : ok === false ? "bad" : "");
+  function isCloseAnswer(input,target){
+    const a=normalize(input), t=normalize(target);
+    if(!a) return false;
+    if(a===t) return true;
+    const d=levenshtein(a,t);
+    const allowed=t.length<=6?1:2;
+    return d<=allowed;
   }
   function fromClientToImageCoords(clientX, clientY) {
     const rect = canvas.getBoundingClientRect();
@@ -250,47 +339,51 @@
     return { x, y };
   }
   function nearestPlace(x, y) {
-    let best = null, bestDist = Infinity;
-    for (const p of PLACES) {
+    let best=null, bestDist=Infinity;
+    for (const p of activePlaces) {
       const d = Math.hypot(x - p.x, y - p.y);
-      if (d < bestDist) { bestDist = d; best = p; }
+      if (d < bestDist) { bestDist=d; best=p; }
     }
     return { place: best, dist: bestDist };
   }
 
   // ======= DRAW =======
-  function drawDot(x, y, r, style) {
+  function drawDot(x,y,r,style){
     ctx.beginPath();
-    ctx.fillStyle = style;
-    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle=style;
+    ctx.arc(x,y,r,0,Math.PI*2);
     ctx.fill();
   }
-  function drawRing(x, y, r, style) {
+  function drawRing(x,y,r,style){
     ctx.beginPath();
-    ctx.strokeStyle = style;
-    ctx.lineWidth = Math.max(2, 6 / screenScale());
-    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.strokeStyle=style;
+    ctx.lineWidth=Math.max(2, 6 / screenScale());
+    ctx.arc(x,y,r,0,Math.PI*2);
     ctx.stroke();
   }
   function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.drawImage(img,0,0,canvas.width,canvas.height);
 
     const DOT_R = dotRadiusCanvasPx();
 
     if (SHOW_ALL_DOTS) {
-      for (const p of PLACES) drawDot(p.x, p.y, DOT_R, "rgba(0,0,0,0.30)");
+      for (const p of activePlaces) drawDot(p.x,p.y,DOT_R,"rgba(0,0,0,0.30)");
     }
 
     if (current && mode === 2) {
-      const RING_R = ringRadiusCanvasPx();
-      drawRing(current.x, current.y, RING_R, "rgba(255, 0, 0, 0.90)");
-      drawDot(current.x, current.y, DOT_R, "rgba(255,0,0,0.90)");
+      const R = ringRadiusCanvasPx();
+      drawRing(current.x,current.y,R,"rgba(255,0,0,0.90)");
+      drawDot(current.x,current.y,DOT_R,"rgba(255,0,0,0.90)");
     }
   }
 
   // ======= GAME =======
   function newRound() {
+    if (activePlaces.length === 0) {
+      promptEl.textContent = "Selecteer provincies en druk op Start toets.";
+      return;
+    }
     current = nextPlace();
     setFeedback("", null);
 
@@ -306,22 +399,17 @@
     draw();
   }
 
-  function setMode(m) {
-    mode = m;
-    if (mode === 1) {
-      mode1Btn.classList.add("primary");
-      mode2Btn.classList.remove("primary");
-    } else {
-      mode2Btn.classList.add("primary");
-      mode1Btn.classList.remove("primary");
-    }
-    newRound();
+  function setMode(m){
+    mode=m;
+    if(mode===1){ mode1Btn.classList.add("primary"); mode2Btn.classList.remove("primary"); }
+    else { mode2Btn.classList.add("primary"); mode1Btn.classList.remove("primary"); }
+    if(current) newRound();
   }
 
-  mode1Btn.addEventListener("click", () => setMode(1));
-  mode2Btn.addEventListener("click", () => setMode(2));
+  mode1Btn.addEventListener("click", ()=>setMode(1));
+  mode2Btn.addEventListener("click", ()=>setMode(2));
 
-  nextBtn.addEventListener("click", () => newRound());
+  nextBtn.addEventListener("click", ()=>newRound());
 
   repeatWrongBtn.addEventListener("click", () => {
     if (wrongPile.length === 0) {
@@ -339,20 +427,22 @@
     streak = 0;
     deck = [];
     wrongPile = [];
+    current = null;
     updateScore();
     setFeedback("", null);
-    newRound();
+    draw();
+    promptEl.textContent = "Selecteer provincies en druk op Start toets.";
   });
 
-  // ======= MODE 1: CLICK (pointerup) =======
+  // ======= ANSWERS =======
   canvas.addEventListener("pointerup", (e) => {
     if (mode !== 1 || !current) return;
     e.preventDefault();
 
-    const { x, y } = fromClientToImageCoords(e.clientX, e.clientY);
-    const { place, dist } = nearestPlace(x, y);
+    const {x,y} = fromClientToImageCoords(e.clientX, e.clientY);
+    const {place, dist} = nearestPlace(x,y);
 
-    if (dist > hitRadiusCanvasPx()) {
+    if (!place || dist > hitRadiusCanvasPx()) {
       setFeedback("Klik iets dichter bij een stip 🙂", false);
       streak = 0;
       updateScore();
@@ -377,10 +467,8 @@
     }
   }, { passive:false });
 
-  // ======= MODE 2: TYPE =======
   function checkTyped() {
     if (mode !== 2 || !current) return;
-
     scoreTotal++;
     const ok = isCloseAnswer(answerInput.value, current.name);
 
@@ -411,11 +499,9 @@
 
   checkBtn.addEventListener("click", checkTyped);
   skipBtn.addEventListener("click", skipTyped);
-  answerInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") checkTyped();
-  });
+  answerInput.addEventListener("keydown", (e) => { if (e.key === "Enter") checkTyped(); });
 
-  window.addEventListener("resize", () => { if (img.complete) draw(); });
+  window.addEventListener("resize", ()=>{ if (img.complete) draw(); });
 })();
 </script>
 </body>
