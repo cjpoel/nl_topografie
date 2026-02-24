@@ -3,43 +3,116 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Topografie – Oefenen</title>
+  <title>Hi! – Topografie oefenen</title>
+
   <style>
-    :root{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;}
-    body{margin:0;background:#f6f7fb;color:#111;}
-    .wrap{max-width:900px;margin:0 auto;padding:18px;}
-    h1{margin:0 0 14px;font-size:22px;}
-    .grid{display:grid;gap:12px;}
-    @media (min-width:700px){.grid{grid-template-columns:1fr 1fr;}}
-    a.card{
-      display:block; text-decoration:none; color:inherit;
-      background:#fff;border-radius:16px;padding:16px;
-      box-shadow:0 6px 18px rgba(0,0,0,.06);
+    :root{
+      font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+    }
+
+    body{
+      margin:0;
+      background: linear-gradient(135deg,#eef2ff,#f6f7fb);
+      color:#111;
+    }
+
+    .wrap{
+      max-width:1000px;
+      margin:0 auto;
+      padding:24px;
+    }
+
+    h1{
+      margin:0 0 20px;
+      font-size:26px;
+    }
+
+    .grid{
+      display:grid;
+      gap:20px;
+    }
+
+    @media (min-width:750px){
+      .grid{
+        grid-template-columns:1fr 1fr;
+      }
+    }
+
+    .card{
+      text-decoration:none;
+      color:inherit;
+      background:#fff;
+      border-radius:18px;
+      overflow:hidden;
+      box-shadow:0 10px 25px rgba(0,0,0,.08);
+      transition:transform .2s ease, box-shadow .2s ease;
       border:1px solid #eef1fb;
     }
-    .title{font-size:18px;font-weight:800;margin:0 0 6px;}
-    .desc{margin:0;color:#444;line-height:1.4;}
-    .hint{margin-top:14px;color:#555;font-size:12px;}
+
+    .card:hover{
+      transform:translateY(-4px);
+      box-shadow:0 16px 30px rgba(0,0,0,.12);
+    }
+
+    .card img{
+      width:100%;
+      height:200px;
+      object-fit:cover;
+      display:block;
+    }
+
+    .card-content{
+      padding:16px;
+    }
+
+    .title{
+      font-size:20px;
+      font-weight:800;
+      margin:0 0 6px;
+    }
+
+    .desc{
+      margin:0;
+      color:#555;
+      line-height:1.4;
+    }
+
+    .footer{
+      margin-top:30px;
+      font-size:12px;
+      color:#555;
+    }
   </style>
 </head>
+
 <body>
   <div class="wrap">
-    <h1>Hi! – Kies een toets</h1>
+    <h1>🎯 Kies een topografie-toets</h1>
 
     <div class="grid">
+
+      <!-- NOORD -->
       <a class="card" href="noord.html">
-        <p class="title">Noord-Nederland</p>
-        <p class="desc">Friesland • Groningen • Drenthe</p>
+        <img src="noord_schoon2.png" alt="Noord Nederland kaart">
+        <div class="card-content">
+          <p class="title">Noord-Nederland</p>
+          <p class="desc">Friesland • Groningen • Drenthe</p>
+        </div>
       </a>
 
+      <!-- OOST -->
       <a class="card" href="oost.html">
-        <p class="title">Oost-Nederland</p>
-        <p class="desc">Flevoland • Overijssel • Gelderland</p>
+        <img src="oost_schoon4.png" alt="Oost Nederland kaart">
+        <div class="card-content">
+          <p class="title">Oost-Nederland</p>
+          <p class="desc">Flevoland • Overijssel • Gelderland</p>
+        </div>
       </a>
+
     </div>
 
-    <div class="hint">
-      Tip: open deze pagina op de iPad en kies “Zet op beginscherm”.
+    <div class="footer">
+      Tip: voeg deze pagina toe aan het beginscherm van de iPad voor snelle toegang.
     </div>
   </div>
 </body>
