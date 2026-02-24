@@ -40,8 +40,9 @@
     .hr { height: 1px; background: #eef1fb; margin: 10px 0; }
     .small { font-size: 12px; color: #444; line-height: 1.4; }
 
-    canvas { width: 100%; height: auto; border-radius: 14px; background: #e9ecf6; }
+    canvas { width: 100%; height: auto; border-radius: 14px; background: #e9ecf6; touch-action: manipulation; }
     #typingArea { display:none; gap:8px; align-items:center; flex-wrap:wrap; }
+    a { color:#111; }
   </style>
 </head>
 <body>
@@ -52,17 +53,16 @@
     <div class="card">
       <canvas id="map" width="1800" height="1260"></canvas>
       <div class="small" style="margin-top:10px;">
-        Modus 1: klik dicht bij de juiste stip. Modus 2: typ de naam. Elke plaats komt 1× per ronde voorbij.
-      </div>
-      <div class="small" style="margin-top:8px;">
         <a href="index.html">← terug naar menu</a>
+        <span> • </span>
+        Modus 1: klik dicht bij de juiste stip. Modus 2: typ de naam.
       </div>
     </div>
 
     <div class="card controls">
       <div class="mode">
-        <button id="mode1" class="primary">Modus 1: klik op plaats</button>
-        <button id="mode2">Modus 2: typ de naam</button>
+        <button id="mode1" class="primary">Modus 1: klik</button>
+        <button id="mode2">Modus 2: typ</button>
       </div>
 
       <div class="prompt" id="prompt">Laden…</div>
@@ -79,15 +79,17 @@
         <div class="pill">Goed: <span id="good">0</span></div>
         <div class="pill">Fout: <span id="bad">0</span></div>
         <div class="pill">Totaal: <span id="total">0</span></div>
+        <div class="pill">Reeks: <span id="streak">0</span></div>
       </div>
 
       <div class="hr"></div>
 
       <button id="next" class="primary">Volgende</button>
-      <button id="reset">Reset score</button>
+      <button id="repeatWrong">Oefen foutjes</button>
+      <button id="reset">Reset</button>
 
       <div class="small">
-        Bestanden in dezelfde map: <code>oost.html</code> en <code>oost_schoon4.png</code>.
+        Bestanden: <code>oost.html</code> + <code>oost_schoon4.png</code>
       </div>
     </div>
   </div>
@@ -95,17 +97,18 @@
 
 <script>
 (() => {
-  // ======= KAART / DATA =======
+  // ======= CONFIG =======
   const MAP_IMAGE = "oost_schoon4.png";
-
-  // GROTERE STIPPEN + MAKKELIJKER KLIKKEN (fijn op iPad)
-  const HIT_RADIUS_PX = 40;
-  const DOT_RADIUS = 16;
-  const RING_RADIUS = 36;
-
   const SHOW_ALL_DOTS = true;
 
-  // Coördinaten zijn uit jouw stippen gehaald (kaart 1800x1260).
+  const DOT_SCREEN_PX = 14;
+  const RING_SCREEN_PX = 34;
+  const HIT_SCREEN_PX  = 40;
+
+  const DELAY_GOOD_MS = 450;
+  const DELAY_BAD_MS  = 900;
+
+  // ======= DATA =======
   const PLACES = [
     // Flevoland
     { name: "Emmeloord", x: 502.5,  y: 106.5 },
@@ -138,6 +141,7 @@
   const goodEl = document.getElementById("good");
   const badEl = document.getElementById("bad");
   const totalEl = document.getElementById("total");
+  const streakEl = document.getElementById("streak");
 
   const mode1Btn = document.getElementById("mode1");
   const mode2Btn = document.getElementById("mode2");
@@ -149,14 +153,43 @@
 
   const nextBtn = document.getElementById("next");
   const resetBtn = document.getElementById("reset");
+  const repeatWrongBtn = document.getElementById("repeatWrong");
 
-  // ======= GAME STATE =======
-  let mode = 1; // 1 = klik op stip op basis van naam, 2 = typ naam op basis van aangewezen stip
+  // ======= STATE =======
+  let mode = 1;
   let current = null;
   let scoreGood = 0, scoreBad = 0, scoreTotal = 0;
+  let streak = 0;
 
-  // ======= “DECK” (shuffle-bag): iedereen 1× per ronde =======
   let deck = [];
+  let wrongPile = [];
+
+  // ======= IMAGE (cache-buster) =======
+  const img = new Image();
+  img.src = addCacheBuster(MAP_IMAGE);
+  img.onload = () => { draw(); newRound(); };
+
+  function addCacheBuster(url) {
+    const v = "v=20260224";
+    return url + (url.includes("?") ? "&" : "?") + v;
+  }
+
+  // ======= SCALE HELPERS =======
+  function screenScale() {
+    const rect = canvas.getBoundingClientRect();
+    return rect.width / canvas.width;
+  }
+  function dotRadiusCanvasPx() {
+    return Math.max(3, (DOT_SCREEN_PX / 2) / screenScale());
+  }
+  function ringRadiusCanvasPx() {
+    return Math.max(10, (RING_SCREEN_PX / 2) / screenScale());
+  }
+  function hitRadiusCanvasPx() {
+    return Math.max(10, (HIT_SCREEN_PX / 2) / screenScale());
+  }
+
+  // ======= DECK =======
   function shuffle(a) {
     for (let i = a.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -169,18 +202,13 @@
     return deck.pop();
   }
 
-  // ======= IMAGE =======
-  const img = new Image();
-  img.src = MAP_IMAGE;
-  img.onload = () => { draw(); newRound(); };
-
   // ======= HELPERS =======
   function updateScore() {
     goodEl.textContent = scoreGood;
     badEl.textContent = scoreBad;
     totalEl.textContent = scoreTotal;
+    streakEl.textContent = streak;
   }
-
   function normalize(s) {
     return (s || "")
       .trim()
@@ -188,7 +216,6 @@
       .normalize("NFD")
       .replace(/\p{Diacritic}/gu, "");
   }
-
   function levenshtein(a, b) {
     a = normalize(a); b = normalize(b);
     const m = a.length, n = b.length;
@@ -203,7 +230,6 @@
     }
     return dp[m][n];
   }
-
   function isCloseAnswer(input, target) {
     const a = normalize(input);
     const t = normalize(target);
@@ -213,14 +239,16 @@
     const allowed = t.length <= 6 ? 1 : 2;
     return d <= allowed;
   }
-
+  function setFeedback(text, ok) {
+    feedbackEl.textContent = text || "";
+    feedbackEl.className = "feedback " + (ok === true ? "good" : ok === false ? "bad" : "");
+  }
   function fromClientToImageCoords(clientX, clientY) {
     const rect = canvas.getBoundingClientRect();
     const x = (clientX - rect.left) * (canvas.width / rect.width);
     const y = (clientY - rect.top) * (canvas.height / rect.height);
     return { x, y };
   }
-
   function nearestPlace(x, y) {
     let best = null, bestDist = Infinity;
     for (const p of PLACES) {
@@ -230,42 +258,38 @@
     return { place: best, dist: bestDist };
   }
 
-  // ======= DRAWING =======
-  function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-    if (SHOW_ALL_DOTS) {
-      for (const p of PLACES) drawDot(p.x, p.y, DOT_RADIUS, "rgba(0,0,0,0.30)");
-    }
-
-    if (current && mode === 2) {
-      drawRing(current.x, current.y, RING_RADIUS, "rgba(255, 0, 0, 0.90)");
-      drawDot(current.x, current.y, DOT_RADIUS, "rgba(255,0,0,0.90)");
-    }
-  }
-
+  // ======= DRAW =======
   function drawDot(x, y, r, style) {
     ctx.beginPath();
     ctx.fillStyle = style;
     ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.fill();
   }
-
   function drawRing(x, y, r, style) {
     ctx.beginPath();
     ctx.strokeStyle = style;
-    ctx.lineWidth = 6;
+    ctx.lineWidth = Math.max(2, 6 / screenScale());
     ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.stroke();
   }
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-  function setFeedback(text, ok) {
-    feedbackEl.textContent = text || "";
-    feedbackEl.className = "feedback " + (ok === true ? "good" : ok === false ? "bad" : "");
+    const DOT_R = dotRadiusCanvasPx();
+
+    if (SHOW_ALL_DOTS) {
+      for (const p of PLACES) drawDot(p.x, p.y, DOT_R, "rgba(0,0,0,0.30)");
+    }
+
+    if (current && mode === 2) {
+      const RING_R = ringRadiusCanvasPx();
+      drawRing(current.x, current.y, RING_R, "rgba(255, 0, 0, 0.90)");
+      drawDot(current.x, current.y, DOT_R, "rgba(255,0,0,0.90)");
+    }
   }
 
-  // ======= ROUNDS =======
+  // ======= GAME =======
   function newRound() {
     current = nextPlace();
     setFeedback("", null);
@@ -296,41 +320,64 @@
 
   mode1Btn.addEventListener("click", () => setMode(1));
   mode2Btn.addEventListener("click", () => setMode(2));
+
   nextBtn.addEventListener("click", () => newRound());
-  resetBtn.addEventListener("click", () => {
-    scoreGood = scoreBad = scoreTotal = 0;
-    deck = [];
-    updateScore();
+
+  repeatWrongBtn.addEventListener("click", () => {
+    if (wrongPile.length === 0) {
+      setFeedback("Geen foutjes om te oefenen 🙂", true);
+      return;
+    }
+    deck = shuffle([...wrongPile]);
+    wrongPile = [];
+    setFeedback("Oefen foutjes!", true);
     newRound();
   });
 
-  // ======= MODE 1: CLICK ANSWER =======
-  canvas.addEventListener("click", (e) => {
+  resetBtn.addEventListener("click", () => {
+    scoreGood = scoreBad = scoreTotal = 0;
+    streak = 0;
+    deck = [];
+    wrongPile = [];
+    updateScore();
+    setFeedback("", null);
+    newRound();
+  });
+
+  // ======= MODE 1: CLICK (pointerup) =======
+  canvas.addEventListener("pointerup", (e) => {
     if (mode !== 1 || !current) return;
+    e.preventDefault();
 
     const { x, y } = fromClientToImageCoords(e.clientX, e.clientY);
     const { place, dist } = nearestPlace(x, y);
 
-    if (dist > HIT_RADIUS_PX) {
+    if (dist > hitRadiusCanvasPx()) {
       setFeedback("Klik iets dichter bij een stip 🙂", false);
+      streak = 0;
+      updateScore();
       return;
     }
 
     scoreTotal++;
+
     if (place.name === current.name) {
       scoreGood++;
-      setFeedback(`✅ Goed!`, true);
+      streak++;
+      setFeedback("✅ Goed!", true);
+      updateScore();
+      setTimeout(newRound, DELAY_GOOD_MS);
     } else {
       scoreBad++;
+      streak = 0;
+      wrongPile.push(current);
       setFeedback(`❌ Fout. Dat was ${place.name}. (Goed: ${current.name})`, false);
-      draw();
-      drawRing(current.x, current.y, RING_RADIUS, "rgba(0, 160, 0, 0.90)");
-      drawDot(current.x, current.y, DOT_RADIUS, "rgba(0,160,0,0.90)");
+      updateScore();
+      setTimeout(newRound, DELAY_BAD_MS);
     }
-    updateScore();
-  });
+  }, { passive:false });
 
-  // ======= MODE 2: TYPE ANSWER =======
+  // ======= MODE 2: TYPE =======
   function checkTyped() {
     if (mode !== 2 || !current) return;
 
@@ -339,23 +386,27 @@
 
     if (ok) {
       scoreGood++;
-      setFeedback(`✅ Goed!`, true);
+      streak++;
+      setFeedback("✅ Goed!", true);
+      updateScore();
+      setTimeout(newRound, DELAY_GOOD_MS);
     } else {
       scoreBad++;
+      streak = 0;
+      wrongPile.push(current);
       setFeedback(`❌ Fout. Goed was: ${current.name}.`, false);
-      draw();
-      drawRing(current.x, current.y, RING_RADIUS, "rgba(0, 160, 0, 0.90)");
-      drawDot(current.x, current.y, DOT_RADIUS, "rgba(0,160,0,0.90)");
+      updateScore();
+      setTimeout(newRound, DELAY_BAD_MS);
     }
-    updateScore();
   }
 
   function skipTyped() {
     if (mode !== 2 || !current) return;
+    streak = 0;
+    wrongPile.push(current);
     setFeedback(`⏭️ Overgeslagen. Dit was: ${current.name}.`, false);
-    draw();
-    drawRing(current.x, current.y, RING_RADIUS, "rgba(0, 160, 0, 0.90)");
-    drawDot(current.x, current.y, DOT_RADIUS, "rgba(0,160,0,0.90)");
+    updateScore();
+    setTimeout(newRound, DELAY_BAD_MS);
   }
 
   checkBtn.addEventListener("click", checkTyped);
@@ -364,6 +415,7 @@
     if (e.key === "Enter") checkTyped();
   });
 
+  window.addEventListener("resize", () => { if (img.complete) draw(); });
 })();
 </script>
 </body>
