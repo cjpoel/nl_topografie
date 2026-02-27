@@ -2,7 +2,7 @@ export const DATASET = {
   id: "zuid",
   title: "Topografie – Zuid-Nederland (kies provincies)",
   mapImage: "zuid_schoon.png",          // <-- jouw nieuwe schone kaart
-  assetVersion: "20260227-2",           // <-- bump dit bij updates (cache-buster)
+  assetVersion: "20260227-3",           // <-- bump dit bij updates (cache-buster)
   canvasWidth: 1250,
   canvasHeight: 1212,
   delayGoodMs: 900,
