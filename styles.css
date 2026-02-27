@@ -1,0 +1,72 @@
+:root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+body { margin: 0; background: #f6f7fb; color: #111; }
+
+.wrap { max-width: 1100px; margin: 0 auto; padding: 16px; }
+h1 { font-size: 20px; margin: 0 0 12px; }
+
+.grid { display: grid; grid-template-columns: 1fr; gap: 18px; }
+@media (min-width: 750px) { .grid { grid-template-columns: 1fr 1fr 1fr; } }
+
+.game-grid { gap: 12px; }
+@media (min-width: 900px) { .game-grid { grid-template-columns: 2fr 1fr; } }
+
+.card {
+  background: #fff; border-radius: 18px; overflow: hidden;
+  box-shadow: 0 10px 25px rgba(0,0,0,.08);
+  border: 1px solid #eef1fb;
+}
+
+.card-content { padding: 16px; display: grid; gap: 6px; }
+.title { font-size: 18px; font-weight: 800; margin: 0; }
+.desc { margin: 0; color: #555; line-height: 1.4; font-size: 14px; }
+.hint { margin-top: 18px; font-size: 12px; color: #555; }
+
+.thumb { width: 100%; height: 190px; object-fit: cover; display: block; background: #e9ecf6; }
+
+.col { display: grid; gap: 10px; padding: 12px; }
+.controls { padding: 12px; }
+
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+
+button, input[type="text"] {
+  font-size: 14px; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid #d7dbe7; background: #fff;
+}
+button { cursor: pointer; }
+button.primary { background: #111; color: #fff; border-color: #111; }
+button:disabled { opacity: .6; cursor: not-allowed; }
+
+.prompt {
+  font-size: 16px; padding: 10px 12px; border-radius: 12px;
+  background: #f1f3ff; border: 1px solid #dfe3ff;
+}
+.feedback { font-weight: 700; min-height: 22px; }
+.good { color: #0a7a2f; }
+.bad { color: #b00020; }
+
+.stats { display: flex; gap: 10px; flex-wrap: wrap; }
+.pill { background:#f2f4fa; border:1px solid #e3e7f5; padding:6px 10px; border-radius:999px; font-size:13px; }
+
+.small { font-size: 12px; color: #444; line-height: 1.4; }
+.divider { height: 1px; background: #eef1fb; margin: 10px 0; }
+
+.chklist { display: grid; gap: 8px; }
+.chk { display: flex; gap: 8px; align-items: center; }
+.chk input { transform: scale(1.1); }
+.tag { font-size: 12px; padding: 2px 8px; border-radius: 999px; background:#f2f4fa; border:1px solid #e3e7f5; }
+
+canvas { width: 100%; height: auto; display: block; background: #e9ecf6; border-radius: 14px; touch-action: manipulation; }
+
+/* Modal */
+.modal-backdrop{
+  position:fixed; inset:0; background: rgba(0,0,0,.35);
+  display:flex; align-items:center; justify-content:center; padding:16px;
+}
+.modal{
+  width:min(720px, 100%);
+  background:#fff;
+  border-radius:16px;
+  padding:14px;
+  box-shadow:0 20px 50px rgba(0,0,0,.25);
+  border:1px solid #eef1fb;
+}
