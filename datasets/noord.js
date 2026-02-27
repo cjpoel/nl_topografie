@@ -2,7 +2,7 @@ export const DATASET = {
   id: "noord",
   title: "Topografie – Noord-Nederland (kies provincies)",
   mapImage: "noord_schoon.png",
-  assetVersion: "2200-1",
+  assetVersion: "2200-2",
   canvasWidth: 2200,
   canvasHeight: 2200,
 
