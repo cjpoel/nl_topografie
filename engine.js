@@ -5,7 +5,7 @@ export class TopoEngine {
     // Config defaults
     this.SHOW_ALL_DOTS = true;
 
-    // “Voelt” overal hetzelfde in scherm-pixels (fallback als dataset geen absolute px gebruikt)
+    // “Voelt” overal hetzelfde in scherm-pixels (fallback)
     this.DOT_SCREEN_PX = 14;
     this.RING_SCREEN_PX = 34;
     this.HIT_SCREEN_PX  = 40;
@@ -17,6 +17,7 @@ export class TopoEngine {
     // Storage keys
     this.LS_KEY_PROVINCES = `topo_selected_provinces_${dataset.id}_v1`;
     this.LS_KEY_HS = "topo_highscores_v1";
+    this.LS_KEY_PRACTICE = `topo_practice_labels_${dataset.id}_v1`;
 
     // State
     this.mode = 1;
@@ -35,8 +36,11 @@ export class TopoEngine {
     this.timerStopMs = null;
     this.timerInterval = null;
 
-    // Hover (voor muis/trackpad/pencil + ook tijdens finger move)
+    // Hover
     this.hoveredPlace = null;
+
+    // Practice (labels on/off)
+    this.practiceLabels = this.loadPracticeLabels();
   }
 
   mount() {
@@ -67,6 +71,8 @@ export class TopoEngine {
 
     this.highscoresBtn = document.getElementById("highscores");
 
+    this.practiceToggleBtn = document.getElementById("practiceToggle");
+
     this.provinceListEl = document.getElementById("provinceList");
     this.selectAllBtn = document.getElementById("selectAll");
     this.startTestBtn = document.getElementById("startTest");
@@ -90,6 +96,9 @@ export class TopoEngine {
     this.selectedProvinces = this.loadSelectedProvinces();
     this.activePlaces = [];
 
+    // Practice button label
+    this.syncPracticeButton();
+
     // Image
     this.img = new Image();
     const v = encodeURIComponent(this.dataset.assetVersion || "1");
@@ -100,7 +109,9 @@ export class TopoEngine {
       this.draw();
       this.setStarted(false);
       this.setFeedback("", null);
-      this.promptEl.textContent = "Selecteer provincies en druk op Start toets.";
+      this.promptEl.textContent = this.practiceLabels
+        ? "Oefenmodus: namen staan aan. Kies provincies en oefen, of druk op Start toets."
+        : "Selecteer provincies en druk op Start toets.";
     };
 
     // Events
@@ -114,10 +125,12 @@ export class TopoEngine {
     this.startTestBtn.addEventListener("click", () => this.startTest());
     this.selectAllBtn.addEventListener("click", () => this.selectAll());
 
+    this.practiceToggleBtn.addEventListener("click", () => this.togglePracticeLabels());
+
     // Click/tap
     this.canvas.addEventListener("pointerup", (e) => this.onPointerUp(e), { passive:false });
 
-    // Hover (muis/trackpad) + ook tijdens finger-move (werkt prima)
+    // Hover
     this.canvas.addEventListener("pointermove", (e) => this.onPointerMove(e), { passive:true });
     this.canvas.addEventListener("pointerleave", () => {
       this.hoveredPlace = null;
@@ -142,6 +155,39 @@ export class TopoEngine {
     return this;
   }
 
+  // ---------- PRACTICE ----------
+  loadPracticeLabels() {
+    try {
+      const raw = localStorage.getItem(this.LS_KEY_PRACTICE);
+      if (raw === null) return false;
+      return raw === "1";
+    } catch {
+      return false;
+    }
+  }
+
+  savePracticeLabels() {
+    localStorage.setItem(this.LS_KEY_PRACTICE, this.practiceLabels ? "1" : "0");
+  }
+
+  syncPracticeButton() {
+    if (!this.practiceToggleBtn) return;
+    this.practiceToggleBtn.textContent = this.practiceLabels ? "Oefenen: namen uit" : "Oefenen: namen aan";
+  }
+
+  togglePracticeLabels() {
+    this.practiceLabels = !this.practiceLabels;
+    this.savePracticeLabels();
+    this.syncPracticeButton();
+    this.draw();
+
+    if (!this.started) {
+      this.promptEl.textContent = this.practiceLabels
+        ? "Oefenmodus: namen staan aan. Kies provincies en oefen, of druk op Start toets."
+        : "Selecteer provincies en druk op Start toets.";
+    }
+  }
+
   // ---------- HOVER ----------
   onPointerMove(e) {
     if (!this.SHOW_ALL_DOTS) return;
@@ -150,11 +196,9 @@ export class TopoEngine {
     const { x, y } = this.fromClientToImageCoords(e.clientX, e.clientY);
     const { place, dist } = this.nearestPlace(x, y);
 
-    // Hover-drempel: gebruik klik-radius (werkt intuïtief)
     const HOVER_R = this.hitRadiusCanvasPx();
     const next = (place && dist <= HOVER_R) ? place : null;
 
-    // Cursor effect (alleen relevant op desktop/trackpad)
     this.canvas.style.cursor = next ? "pointer" : "default";
 
     if (next?.name !== this.hoveredPlace?.name) {
@@ -228,11 +272,7 @@ export class TopoEngine {
 
     const all = this.loadHighscores();
     all.push(entry);
-
-    // sort: eerst laagste tijd, dan minst fout
     all.sort((a,b) => (a.timeSec - b.timeSec) || (a.wrong - b.wrong));
-
-    // max 200 bewaren
     this.saveHighscores(all.slice(0, 200));
     return entry;
   }
@@ -378,7 +418,6 @@ export class TopoEngine {
   }
 
   nextPlace() {
-    // shuffle-bag: iedereen 1× per ronde
     if (this.deck.length === 0) this.deck = this.shuffle([...this.activePlaces]);
     return this.deck.pop();
   }
@@ -393,7 +432,6 @@ export class TopoEngine {
       return;
     }
 
-    // stop zodra alles 1× is geweest
     if (this.deck.length === 0 && this.scoreTotal > 0) {
       if (this.scoreTotal >= this.activePlaces.length) {
         this.finishRound();
@@ -419,12 +457,9 @@ export class TopoEngine {
   finishRound() {
     this.stopTimer();
     const entry = this.addHighscoreEntry();
-
     const t = this.formatTime(entry.timeSec * 1000);
     this.setFeedback(`🏁 Ronde klaar! Tijd: ${t} • Fout: ${entry.wrong}`, true);
     this.openHighscores();
-
-    // Niet automatisch resetten; user kan doorgaan met “Start toets”
     this.setStarted(false);
   }
 
@@ -457,7 +492,9 @@ export class TopoEngine {
     this.setFeedback("", null);
     this.setStarted(false);
     this.draw();
-    this.promptEl.textContent = "Selecteer provincies en druk op Start toets.";
+    this.promptEl.textContent = this.practiceLabels
+      ? "Oefenmodus: namen staan aan. Kies provincies en oefen, of druk op Start toets."
+      : "Selecteer provincies en druk op Start toets.";
   }
 
   // ---------- ANSWERS ----------
@@ -534,8 +571,6 @@ export class TopoEngine {
     return rect.width / this.canvas.width;
   }
 
-  // Als dataset vaste canvas-pixels meegeeft, gebruiken we die.
-  // Anders vallen we terug naar "screen px" gevoel.
   dotRadiusCanvasPx() {
     if (typeof this.dataset.dotRadiusPx === "number") return this.dataset.dotRadiusPx;
     return Math.max(3, (this.DOT_SCREEN_PX/2) / this.screenScale());
@@ -580,19 +615,82 @@ export class TopoEngine {
     this.ctx.stroke();
   }
 
+  drawLabel(text, x, y) {
+    const ctx = this.ctx;
+    const scale = this.screenScale();
+
+    // Label styling (schaalt mee)
+    const fontPx = Math.max(12, 18 / scale);
+    const pad = Math.max(3, 6 / scale);
+    const r = Math.max(4, 8 / scale);
+
+    ctx.font = `700 ${fontPx}px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif`;
+    ctx.textBaseline = "middle";
+
+    const metrics = ctx.measureText(text);
+    const w = metrics.width + pad * 2;
+    const h = fontPx + pad * 1.6;
+
+    // Offset zodat label niet exact op stip ligt
+    const dx = Math.max(10, 14 / scale);
+    const dy = Math.max(10, 14 / scale);
+
+    // Plaats label rechtsboven van stip
+    let bx = x + dx;
+    let by = y - dy - h / 2;
+
+    // Houd labels binnen canvas
+    if (bx + w > this.canvas.width - 6) bx = x - dx - w;
+    if (by < 6) by = y + dy;
+    if (by + h > this.canvas.height - 6) by = this.canvas.height - 6 - h;
+
+    // Achtergrond
+    ctx.fillStyle = "rgba(255,255,255,0.82)";
+    this.roundRect(bx, by, w, h, r);
+    ctx.fill();
+
+    // Rand
+    ctx.strokeStyle = "rgba(0,0,0,0.18)";
+    ctx.lineWidth = Math.max(1, 2 / scale);
+    ctx.stroke();
+
+    // Tekst
+    ctx.fillStyle = "rgba(0,0,0,0.85)";
+    ctx.fillText(text, bx + pad, by + h / 2);
+  }
+
+  roundRect(x, y, w, h, r) {
+    const ctx = this.ctx;
+    const rr = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + rr, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rr);
+    ctx.arcTo(x + w, y + h, x, y + h, rr);
+    ctx.arcTo(x, y + h, x, y, rr);
+    ctx.arcTo(x, y, x + w, y, rr);
+    ctx.closePath();
+  }
+
   draw() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.ctx.drawImage(this.img, 0, 0, this.canvas.width, this.canvas.height);
 
     const DOT_R = this.dotRadiusCanvasPx();
 
-    // Extra stippen (grijs) + hover effect
+    // Extra stippen + hover
     if (this.SHOW_ALL_DOTS) {
       for (const p of this.activePlaces) {
         const isHover = this.hoveredPlace && (p.name === this.hoveredPlace.name);
-        const r = isHover ? DOT_R * 1.5 : DOT_R; // 20% groter
-        const alpha = isHover ? 0.55 : 0.35;     // iets duidelijker bij hover
+        const r = isHover ? DOT_R * 1.2 : DOT_R;
+        const alpha = isHover ? 0.55 : 0.35;
         this.drawDot(p.x, p.y, r, `rgba(0,0,0,${alpha})`);
+      }
+    }
+
+    // Oefenmodus: labels tekenen
+    if (this.practiceLabels) {
+      for (const p of this.activePlaces) {
+        this.drawLabel(p.name, p.x, p.y);
       }
     }
 
@@ -624,13 +722,13 @@ export class TopoEngine {
   levenshtein(a, b) {
     a = this.normalize(a); b = this.normalize(b);
     const m = a.length, n = b.length;
-    const dp = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
-    for (let i = 0; i <= m; i++) dp[i][0] = i;
-    for (let j = 0; j <= n; j++) dp[0][j] = j;
-    for (let i = 1; i <= m; i++) {
-      for (let j = 1; j <= n; j++) {
-        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-        dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost);
+    const dp = Array.from({length:m+1}, () => Array(n+1).fill(0));
+    for (let i=0;i<=m;i++) dp[i][0]=i;
+    for (let j=0;j<=n;j++) dp[0][j]=j;
+    for (let i=1;i<=m;i++){
+      for (let j=1;j<=n;j++){
+        const cost = a[i-1]===b[j-1] ? 0 : 1;
+        dp[i][j] = Math.min(dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1]+cost);
       }
     }
     return dp[m][n];
