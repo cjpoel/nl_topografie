@@ -16,7 +16,7 @@
         <div class="small" style="margin-top:10px;">
           <a href="index.html">← terug naar menu</a>
           <span> • </span>
-          Tip: selectie + highscores blijven bewaard op dit apparaat.
+          Tip: selectie + oefenmodus + highscores blijven bewaard op dit apparaat.
         </div>
       </div>
 
@@ -55,6 +55,12 @@
 
         <div class="divider"></div>
 
+        <div class="row">
+          <button id="practiceToggle">Oefenen: namen aan</button>
+        </div>
+
+        <div class="divider"></div>
+
         <div>
           <div class="row" style="justify-content:space-between;">
             <b>Provincies in toets</b>
@@ -88,16 +94,13 @@
   </div>
 
   <script type="module">
-    // ⬇️ Verhoog deze als je JS wijzigt (engine/datasets). Dit bust de cache.
-    const APP_VERSION = "v1.1.2";
+    // Verhoog deze als je JS wijzigt (cache-buster voor engine + datasets)
+    const APP_VERSION = "v1.2.0";
 
     const params = new URLSearchParams(location.search);
     const set = params.get("set") || "noord";
 
-    // Engine met cache-buster
     const { TopoEngine } = await import(`./engine.js?v=${encodeURIComponent(APP_VERSION)}`);
-
-    // Dataset met cache-buster
     const datasetModule = await import(`./datasets/${set}.js?v=${encodeURIComponent(APP_VERSION)}`);
     const dataset = datasetModule.DATASET;
 
