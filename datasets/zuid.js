@@ -1,28 +1,31 @@
 export const DATASET = {
   id: "zuid",
   title: "Topografie – Zuid-Nederland (kies provincies)",
-  mapImage: "zuid_schoon3.png",
-  assetVersion: "20260227-1",
-  canvasWidth: 1256,
-  canvasHeight: 880,
+  mapImage: "zuid_schoon.png",          // <-- jouw nieuwe schone kaart
+  assetVersion: "20260227-2",           // <-- bump dit bij updates (cache-buster)
+  canvasWidth: 1250,
+  canvasHeight: 1212,
   delayGoodMs: 900,
   delayBadMs: 1600,
   places: [
-    { name: "Utrecht",    province: "Utrecht",       x: 682.7,  y: 348.6 },
-    { name: "Amersfoort", province: "Utrecht",       x: 774.7,  y: 310.5 },
+    // Utrecht
+    { name: "Utrecht",     province: "Utrecht", x: 682.6,  y: 348.6 },
+    { name: "Amersfoort",  province: "Utrecht", x: 774.6,  y: 310.6 },
 
-    { name: "Bergen op Zoom",   province: "Noord-Brabant", x: 388.7,  y: 688.5 },
-    { name: "Roosendaal",       province: "Noord-Brabant", x: 450.7,  y: 666.5 },
-    { name: "Breda",            province: "Noord-Brabant", x: 558.7,  y: 636.5 },
-    { name: "'s-Hertogenbosch", province: "Noord-Brabant", x: 670.7,  y: 652.6 },
-    { name: "Tilburg",          province: "Noord-Brabant", x: 746.7,  y: 572.6 },
-    { name: "Oss",              province: "Noord-Brabant", x: 820.7,  y: 534.6 },
-    { name: "Eindhoven",        province: "Noord-Brabant", x: 806.7,  y: 718.6 },
-    { name: "Helmond",          province: "Noord-Brabant", x: 872.7,  y: 694.6 },
+    // Noord-Brabant
+    { name: "Bergen op Zoom",   province: "Noord-Brabant", x: 388.6, y: 688.6 },
+    { name: "Roosendaal",       province: "Noord-Brabant", x: 450.6, y: 666.6 },
+    { name: "Breda",            province: "Noord-Brabant", x: 558.6, y: 636.6 },
+    { name: "'s-Hertogenbosch", province: "Noord-Brabant", x: 670.6, y: 652.6 },
+    { name: "Tilburg",          province: "Noord-Brabant", x: 746.6, y: 572.6 },
+    { name: "Oss",              province: "Noord-Brabant", x: 820.6, y: 534.6 },
+    { name: "Eindhoven",        province: "Noord-Brabant", x: 806.6, y: 718.6 },
+    { name: "Helmond",          province: "Noord-Brabant", x: 872.6, y: 694.6 },
 
-    { name: "Venlo",      province: "Limburg", x: 1050.7, y: 758.5 },
-    { name: "Roermond",   province: "Limburg", x: 986.7,  y: 856.5 },
-    { name: "Heerlen",    province: "Limburg", x: 984.7,  y: 1032.5 },
-    { name: "Maastricht", province: "Limburg", x: 880.7,  y: 1050.4 },
+    // Limburg
+    { name: "Venlo",      province: "Limburg", x: 1050.6, y: 758.6 },
+    { name: "Roermond",   province: "Limburg", x: 986.6,  y: 856.6 },
+    { name: "Heerlen",    province: "Limburg", x: 984.6,  y: 1032.6 },
+    { name: "Maastricht", province: "Limburg", x: 880.6,  y: 1050.6 },
   ]
 };
