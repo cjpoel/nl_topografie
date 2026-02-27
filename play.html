@@ -8,94 +8,114 @@
 </head>
 <body>
   <div class="wrap">
-    <h1 id="pageTitle">Topografie</h1>
-
-    <div class="grid game-grid">
-      <div class="card">
-        <canvas id="map"></canvas>
-        <div class="small" style="margin-top:10px;">
+    <header class="topbar">
+      <div>
+        <h1 id="pageTitle">Topografie</h1>
+        <div class="subtle">
           <a href="index.html">← terug naar menu</a>
-          <span> • </span>
-          Tip: selectie + oefenmodus + highscores blijven bewaard op dit apparaat.
-        </div>
-      </div>
-
-      <div class="card col controls">
-        <div class="row">
-          <button id="mode1" class="primary">Modus 1: klik</button>
-          <button id="mode2">Modus 2: typ</button>
-        </div>
-
-        <div class="prompt" id="prompt">Laden…</div>
-
-        <div id="typingArea" class="row" style="display:none;">
-          <input id="answer" type="text" placeholder="Typ de plaatsnaam…" autocomplete="off" />
-          <button id="check" class="primary">Controleer</button>
-          <button id="skip">Sla over</button>
-        </div>
-
-        <div class="feedback" id="feedback"></div>
-
-        <div class="stats">
-          <div class="pill">Tijd: <span id="time">0:00</span></div>
-          <div class="pill">Goed: <span id="good">0</span></div>
-          <div class="pill">Fout: <span id="bad">0</span></div>
-          <div class="pill">Totaal: <span id="total">0</span></div>
-          <div class="pill">Reeks: <span id="streak">0</span></div>
-        </div>
-
-        <div class="divider"></div>
-
-        <div class="row">
-          <button id="next" class="primary" disabled>Volgende</button>
-          <button id="repeatWrong" disabled>Oefen foutjes</button>
-          <button id="highscores">Highscores</button>
-          <button id="reset">Reset</button>
-        </div>
-
-        <div class="divider"></div>
-
-        <div class="row">
-          <button id="practiceToggle">Oefenen: namen aan</button>
-        </div>
-
-        <div class="divider"></div>
-
-        <div>
-          <div class="row" style="justify-content:space-between;">
-            <b>Provincies in toets</b>
-            <span class="tag" id="activeCount">0 plaatsen</span>
-          </div>
-          <div class="chklist" id="provinceList"></div>
-          <div class="row" style="margin-top:10px;">
-            <button id="selectAll">Alles</button>
-            <button id="startTest" class="primary">Start toets</button>
-          </div>
-        </div>
-
-        <div class="small" style="margin-top:10px;">
+          <span class="dot">•</span>
           Dataset: <code id="datasetCode">?</code>
         </div>
       </div>
+    </header>
+
+    <div class="layout">
+      <!-- MAP -->
+      <section class="card mapcard">
+        <canvas id="map"></canvas>
+      </section>
+
+      <!-- PANEL -->
+      <aside class="card panel">
+
+        <!-- PRIMARY: MODE + PROMPT -->
+        <div class="section">
+          <div class="segmented" role="tablist" aria-label="Modus">
+            <button id="mode1" class="seg primary" type="button">Modus 1: klik</button>
+            <button id="mode2" class="seg" type="button">Modus 2: typ</button>
+          </div>
+
+          <div class="prompt" id="prompt">Laden…</div>
+
+          <div id="typingArea" class="typing" style="display:none;">
+            <input id="answer" type="text" placeholder="Typ de plaatsnaam…" autocomplete="off" />
+            <button id="check" class="btn primary" type="button">Check</button>
+            <button id="skip" class="btn" type="button">Skip</button>
+          </div>
+
+          <div class="feedback" id="feedback"></div>
+        </div>
+
+        <!-- SCORE: COMPACT -->
+        <div class="section">
+          <div class="statsgrid">
+            <div class="stat"><span class="k">Tijd</span><span class="v" id="time">0:00</span></div>
+            <div class="stat"><span class="k">Reeks</span><span class="v" id="streak">0</span></div>
+            <div class="stat"><span class="k">Goed</span><span class="v" id="good">0</span></div>
+            <div class="stat"><span class="k">Fout</span><span class="v" id="bad">0</span></div>
+            <div class="stat wide"><span class="k">Totaal</span><span class="v" id="total">0</span></div>
+          </div>
+        </div>
+
+        <!-- PRIMARY ACTIONS -->
+        <div class="section">
+          <div class="actions">
+            <button id="startTest" class="btn primary big" type="button">Start toets</button>
+            <button id="next" class="btn big" type="button" disabled>Volgende</button>
+          </div>
+
+          <div class="actions secondary">
+            <button id="highscores" class="btn" type="button">Highscores</button>
+            <button id="repeatWrong" class="btn" type="button" disabled>Oefen foutjes</button>
+          </div>
+        </div>
+
+        <!-- SETTINGS (collapsible) -->
+        <details class="details" id="settingsDetails">
+          <summary class="summary">Instellingen</summary>
+
+          <div class="detailsBody">
+            <div class="row">
+              <button id="practiceToggle" class="btn" type="button">Oefenen: namen aan</button>
+              <button id="reset" class="btn danger" type="button">Reset</button>
+            </div>
+
+            <div class="provHeader">
+              <div class="provTitle">
+                <b>Provincies</b>
+                <span class="tag" id="activeCount">0 plaatsen</span>
+              </div>
+              <button id="selectAll" class="btn" type="button">Alles</button>
+            </div>
+
+            <div class="chklist" id="provinceList"></div>
+
+            <div class="hint subtle">
+              Tip: zet instellingen alleen open als je iets wil aanpassen.
+            </div>
+          </div>
+        </details>
+
+      </aside>
     </div>
   </div>
 
   <!-- Highscore modal -->
   <div id="modalBackdrop" class="modal-backdrop" style="display:none;">
     <div class="modal">
-      <div class="row" style="justify-content:space-between; align-items:center;">
+      <div class="modalTop">
         <b>🏆 Highscores</b>
-        <button id="closeModal">Sluiten</button>
+        <button id="closeModal" class="btn" type="button">Sluiten</button>
       </div>
-      <div class="small" id="hsSubtitle" style="margin-top:6px;"></div>
+      <div class="subtle" id="hsSubtitle" style="margin-top:6px;"></div>
       <div class="divider"></div>
-      <div id="hsContent" class="small"></div>
+      <div id="hsContent" class="subtle"></div>
     </div>
   </div>
 
   <script type="module">
     // Verhoog deze als je JS wijzigt (cache-buster voor engine + datasets)
-    const APP_VERSION = "v1.2.0";
+    const APP_VERSION = "v1.2.1";
 
     const params = new URLSearchParams(location.search);
     const set = params.get("set") || "noord";
