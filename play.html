@@ -88,25 +88,22 @@
   </div>
 
   <script type="module">
-    import { TopoEngine } from "./engine.js";
+    // ⬇️ Verhoog deze als je JS wijzigt (engine/datasets). Dit bust de cache.
+    const APP_VERSION = "v1.1.2";
 
     const params = new URLSearchParams(location.search);
     const set = params.get("set") || "noord";
 
-    async function loadDataset(id) {
-      if (id === "noord") return (await import("./datasets/noord.js")).DATASET;
-      if (id === "oost")  return (await import("./datasets/oost.js")).DATASET;
-      if (id === "zuid")  return (await import("./datasets/zuid.js")).DATASET;
-      throw new Error("Onbekende dataset: " + id);
-    }
+    // Engine met cache-buster
+    const { TopoEngine } = await import(`./engine.js?v=${encodeURIComponent(APP_VERSION)}`);
 
-    const dataset = await loadDataset(set);
+    // Dataset met cache-buster
+    const datasetModule = await import(`./datasets/${set}.js?v=${encodeURIComponent(APP_VERSION)}`);
+    const dataset = datasetModule.DATASET;
 
-    // Titel bovenaan
     document.getElementById("pageTitle").textContent = dataset.title;
     document.getElementById("datasetCode").textContent = dataset.id;
 
-    // Start engine
     new TopoEngine(dataset).mount();
   </script>
 </body>
