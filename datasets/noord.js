@@ -1,25 +1,32 @@
 export const DATASET = {
   id: "noord",
   title: "Topografie – Noord-Nederland (kies provincies)",
-  mapImage: "noord_schoon2.png",
-  assetVersion: "20260227-1",
-  canvasWidth: 608,
-  canvasHeight: 425,
-  delayGoodMs: 800,
-  delayBadMs: 1200,
+  mapImage: "noord_schoon_2200.png",
+  assetVersion: "2200-1",
+  canvasWidth: 2200,
+  canvasHeight: 2200,
+
+  // (optioneel) grotere stippen + grotere klik-zone
+  dotRadiusPx: 12,
+  hitRadiusPx: 55,
+  ringRadiusPx: 28,
+
   places: [
-    { name: "Delfzijl",   province: "Groningen", x: 464.7, y: 101.8 },
-    { name: "Groningen",  province: "Groningen", x: 402.3, y: 135.2 },
-    { name: "Veendam",    province: "Groningen", x: 457.5, y: 168.5 },
+    // Groningen
+    { name: "Delfzijl",  province: "Groningen", x: 1838.6, y: 506.6 },
+    { name: "Groningen", province: "Groningen", x: 1424.6, y: 724.6 },
+    { name: "Veendam",   province: "Groningen", x: 1792.6, y: 944.6 },
 
-    { name: "Leeuwarden", province: "Friesland", x: 262.7, y: 141.1 },
-    { name: "Drachten",   province: "Friesland", x: 319.3, y: 170.7 },
-    { name: "Sneek",      province: "Friesland", x: 240.3, y: 190.4 },
-    { name: "Heerenveen", province: "Friesland", x: 286.5, y: 212.4 },
+    // Friesland
+    { name: "Leeuwarden", province: "Friesland", x: 504.6, y: 762.6 },
+    { name: "Drachten",   province: "Friesland", x: 876.6, y: 958.6 },
+    { name: "Sneek",      province: "Friesland", x: 358.6, y: 1088.6 },
+    { name: "Heerenveen", province: "Friesland", x: 662.6, y: 1232.6 },
 
-    { name: "Assen",      province: "Drenthe",   x: 401.2, y: 201.0 },
-    { name: "Emmen",      province: "Drenthe",   x: 462.8, y: 265.2 },
-    { name: "Hoogeveen",  province: "Drenthe",   x: 385.7, y: 281.7 },
-    { name: "Meppel",     province: "Drenthe",   x: 335.7, y: 290.2 },
+    // Drenthe
+    { name: "Assen",     province: "Drenthe", x: 1420.6, y: 1160.5 },
+    { name: "Emmen",     province: "Drenthe", x: 1824.6, y: 1584.5 },
+    { name: "Hoogeveen", province: "Drenthe", x: 1318.6, y: 1694.5 },
+    { name: "Meppel",    province: "Drenthe", x: 986.6,  y: 1746.5 },
   ]
 };
