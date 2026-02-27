@@ -590,7 +590,7 @@ export class TopoEngine {
     if (this.SHOW_ALL_DOTS) {
       for (const p of this.activePlaces) {
         const isHover = this.hoveredPlace && (p.name === this.hoveredPlace.name);
-        const r = isHover ? DOT_R * 1.2 : DOT_R; // 20% groter
+        const r = isHover ? DOT_R * 1.5 : DOT_R; // 20% groter
         const alpha = isHover ? 0.55 : 0.35;     // iets duidelijker bij hover
         this.drawDot(p.x, p.y, r, `rgba(0,0,0,${alpha})`);
       }
