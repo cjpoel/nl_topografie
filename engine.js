@@ -2,10 +2,10 @@ export class TopoEngine {
   constructor(dataset) {
     this.dataset = dataset;
 
-    // Config defaults (kun je per dataset overriden)
+    // Config defaults
     this.SHOW_ALL_DOTS = true;
 
-    // “Voelt” overal hetzelfde in scherm-pixels
+    // “Voelt” overal hetzelfde in scherm-pixels (fallback als dataset geen absolute px gebruikt)
     this.DOT_SCREEN_PX = 14;
     this.RING_SCREEN_PX = 34;
     this.HIT_SCREEN_PX  = 40;
@@ -34,6 +34,9 @@ export class TopoEngine {
     this.timerStartMs = null;
     this.timerStopMs = null;
     this.timerInterval = null;
+
+    // Hover (voor muis/trackpad/pencil + ook tijdens finger move)
+    this.hoveredPlace = null;
   }
 
   mount() {
@@ -111,12 +114,23 @@ export class TopoEngine {
     this.startTestBtn.addEventListener("click", () => this.startTest());
     this.selectAllBtn.addEventListener("click", () => this.selectAll());
 
+    // Click/tap
     this.canvas.addEventListener("pointerup", (e) => this.onPointerUp(e), { passive:false });
 
+    // Hover (muis/trackpad) + ook tijdens finger-move (werkt prima)
+    this.canvas.addEventListener("pointermove", (e) => this.onPointerMove(e), { passive:true });
+    this.canvas.addEventListener("pointerleave", () => {
+      this.hoveredPlace = null;
+      this.canvas.style.cursor = "default";
+      this.draw();
+    });
+
+    // Typen
     this.checkBtn.addEventListener("click", () => this.checkTyped());
     this.skipBtn.addEventListener("click", () => this.skipTyped());
     this.answerInput?.addEventListener("keydown", (e) => { if (e.key === "Enter") this.checkTyped(); });
 
+    // Highscores modal
     this.highscoresBtn.addEventListener("click", () => this.openHighscores());
     this.closeModalBtn.addEventListener("click", () => this.closeHighscores());
     this.modalBackdrop.addEventListener("click", (e) => {
@@ -126,6 +140,27 @@ export class TopoEngine {
     window.addEventListener("resize", () => { if (this.img.complete) this.draw(); });
 
     return this;
+  }
+
+  // ---------- HOVER ----------
+  onPointerMove(e) {
+    if (!this.SHOW_ALL_DOTS) return;
+    if (!this.activePlaces || this.activePlaces.length === 0) return;
+
+    const { x, y } = this.fromClientToImageCoords(e.clientX, e.clientY);
+    const { place, dist } = this.nearestPlace(x, y);
+
+    // Hover-drempel: gebruik klik-radius (werkt intuïtief)
+    const HOVER_R = this.hitRadiusCanvasPx();
+    const next = (place && dist <= HOVER_R) ? place : null;
+
+    // Cursor effect (alleen relevant op desktop/trackpad)
+    this.canvas.style.cursor = next ? "pointer" : "default";
+
+    if (next?.name !== this.hoveredPlace?.name) {
+      this.hoveredPlace = next;
+      this.draw();
+    }
   }
 
   // ---------- TIMER ----------
@@ -358,12 +393,8 @@ export class TopoEngine {
       return;
     }
 
-    // Als deck leeg *en* dit was de laatste: ronde klaar
-    // (we checken dit vóór het pakken van de volgende)
+    // stop zodra alles 1× is geweest
     if (this.deck.length === 0 && this.scoreTotal > 0) {
-      // we starten direct een nieuwe deck in nextPlace(); maar we willen hier juist stoppen.
-      // Dus: als alles 1× is geweest, stoppen we zodra scoreTotal == activePlaces.length
-      // (bij skip telt total mee)
       if (this.scoreTotal >= this.activePlaces.length) {
         this.finishRound();
         return;
@@ -418,6 +449,9 @@ export class TopoEngine {
     this.deck = [];
     this.wrongPile = [];
     this.current = null;
+
+    this.hoveredPlace = null;
+    this.canvas.style.cursor = "default";
 
     this.updateScore();
     this.setFeedback("", null);
@@ -500,13 +534,18 @@ export class TopoEngine {
     return rect.width / this.canvas.width;
   }
 
+  // Als dataset vaste canvas-pixels meegeeft, gebruiken we die.
+  // Anders vallen we terug naar "screen px" gevoel.
   dotRadiusCanvasPx() {
+    if (typeof this.dataset.dotRadiusPx === "number") return this.dataset.dotRadiusPx;
     return Math.max(3, (this.DOT_SCREEN_PX/2) / this.screenScale());
   }
   ringRadiusCanvasPx() {
+    if (typeof this.dataset.ringRadiusPx === "number") return this.dataset.ringRadiusPx;
     return Math.max(10, (this.RING_SCREEN_PX/2) / this.screenScale());
   }
   hitRadiusCanvasPx() {
+    if (typeof this.dataset.hitRadiusPx === "number") return this.dataset.hitRadiusPx;
     return Math.max(10, (this.HIT_SCREEN_PX/2) / this.screenScale());
   }
 
@@ -542,17 +581,22 @@ export class TopoEngine {
   }
 
   draw() {
-    this.ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
-    this.ctx.drawImage(this.img, 0,0,this.canvas.width,this.canvas.height);
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.ctx.drawImage(this.img, 0, 0, this.canvas.width, this.canvas.height);
 
     const DOT_R = this.dotRadiusCanvasPx();
 
+    // Extra stippen (grijs) + hover effect
     if (this.SHOW_ALL_DOTS) {
       for (const p of this.activePlaces) {
-        this.drawDot(p.x, p.y, DOT_R, "rgba(0,0,0,0.35)");
+        const isHover = this.hoveredPlace && (p.name === this.hoveredPlace.name);
+        const r = isHover ? DOT_R * 1.2 : DOT_R; // 20% groter
+        const alpha = isHover ? 0.55 : 0.35;     // iets duidelijker bij hover
+        this.drawDot(p.x, p.y, r, `rgba(0,0,0,${alpha})`);
       }
     }
 
+    // Modus 2: highlight huidige plek
     if (this.current && this.mode === 2) {
       const R = this.ringRadiusCanvasPx();
       this.drawRing(this.current.x, this.current.y, R, "rgba(255,0,0,0.90)");
@@ -580,13 +624,13 @@ export class TopoEngine {
   levenshtein(a, b) {
     a = this.normalize(a); b = this.normalize(b);
     const m = a.length, n = b.length;
-    const dp = Array.from({length:m+1}, () => Array(n+1).fill(0));
-    for (let i=0;i<=m;i++) dp[i][0]=i;
-    for (let j=0;j<=n;j++) dp[0][j]=j;
-    for (let i=1;i<=m;i++){
-      for (let j=1;j<=n;j++){
-        const cost = a[i-1]===b[j-1] ? 0 : 1;
-        dp[i][j] = Math.min(dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1]+cost);
+    const dp = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+    for (let i = 0; i <= m; i++) dp[i][0] = i;
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+        dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost);
       }
     }
     return dp[m][n];
