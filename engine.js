@@ -10,6 +10,9 @@ export class TopoEngine {
     this.RING_SCREEN_PX = 34;
     this.HIT_SCREEN_PX  = 40;
 
+    // Klikken net buiten de rand van een vlak (kustlijn) telt nog mee
+    this.AREA_EDGE_PX = dataset.areaEdgePx ?? 12;
+
     // Auto door na antwoord
     this.DELAY_GOOD_MS = dataset.delayGoodMs ?? 900;
     this.DELAY_BAD_MS  = dataset.delayBadMs  ?? 1600;
@@ -212,7 +215,7 @@ export class TopoEngine {
 
     this.canvas.style.cursor = next ? "pointer" : "default";
 
-    if (next?.name !== this.hoveredPlace?.name) {
+    if (next !== this.hoveredPlace) {
       this.hoveredPlace = next;
       this.draw();
     }
@@ -513,7 +516,10 @@ export class TopoEngine {
     e.preventDefault();
 
     const { x, y } = this.fromClientToImageCoords(e.clientX, e.clientY);
-    const { place, hit } = this.nearestPlace(x, y);
+    // Klik binnen het gebied van de gevraagde plek telt altijd als goed, ook
+    // als er een andere plek dichterbij ligt (bijv. Parijs binnen Frankrijk).
+    const onCurrent = this.zoneRel(this.current, x, y) <= 1;
+    const { place, hit } = onCurrent ? { place: this.current, hit: true } : this.nearestPlace(x, y);
 
     if (!hit) {
       this.streak = 0;
@@ -524,7 +530,7 @@ export class TopoEngine {
 
     this.scoreTotal++;
 
-    if (place.name === this.current.name) {
+    if (place === this.current) {
       this.scoreGood++;
       this.streak++;
       this.setFeedback("✅ Goed!", true);
@@ -601,20 +607,82 @@ export class TopoEngine {
     return { x, y };
   }
 
-  // Een plek mag een eigen klikradius hebben (place.hitRadiusPx) en meerdere
-  // klikpunten (place.hitPoints: [[x,y], ...]), bijv. een gebergte als band.
-  // Afstand telt relatief aan de radius, zodat een groot gebied niet wint van
-  // een stip waar je vlak naast klikt.
+  // Soorten plekken:
+  // - punt (standaard): stip op x/y, klikradius hitRadiusPx (dataset of plek)
+  // - band: hitPoints [[x,y], ...] met hitRadiusPx, bijv. een gebergte
+  // - vlak: polygons [[[x,y], ...], ...], bijv. een land; x/y is dan het labelpunt
+  isArea(p) {
+    return !!(p.polygons || p.hitPoints);
+  }
+
+  // Relatieve afstand tot de klikzone van een plek: <= 1 is raak.
+  // Een vlak geeft binnenin 0.99, zodat een stip waar je vlak naast klikt
+  // (een hoofdstad in dat land) voorgaat.
+  zoneRel(p, x, y) {
+    if (p.polygons) {
+      if (p.polygons.some(poly => this.pointInPolygon(x, y, poly))) return 0.99;
+      const d = Math.min(...p.polygons.map(poly => this.distToPolygonEdge(x, y, poly)));
+      return d <= this.AREA_EDGE_PX ? 0.995 : Infinity;
+    }
+    const pts = p.hitPoints ?? [[p.x, p.y]];
+    const d = Math.min(...pts.map(([px, py]) => Math.hypot(x - px, y - py)));
+    return d / (p.hitRadiusPx ?? this.hitRadiusCanvasPx());
+  }
+
   nearestPlace(x, y) {
-    const defaultR = this.hitRadiusCanvasPx();
     let best = null, bestRel = Infinity;
     for (const p of this.activePlaces) {
-      const pts = p.hitPoints ?? [[p.x, p.y]];
-      const d = Math.min(...pts.map(([px, py]) => Math.hypot(x - px, y - py)));
-      const rel = d / (p.hitRadiusPx ?? defaultR);
+      const rel = this.zoneRel(p, x, y);
       if (rel < bestRel) { bestRel = rel; best = p; }
     }
     return { place: best, hit: !!best && bestRel <= 1 };
+  }
+
+  pointInPolygon(x, y, poly) {
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const [xi, yi] = poly[i], [xj, yj] = poly[j];
+      if ((yi > y) !== (yj > y) && x < xj + (y - yj) * (xi - xj) / (yi - yj)) inside = !inside;
+    }
+    return inside;
+  }
+
+  distToPolygonEdge(x, y, poly) {
+    let best = Infinity;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const [x1, y1] = poly[j], [x2, y2] = poly[i];
+      const dx = x2 - x1, dy = y2 - y1, len2 = dx * dx + dy * dy;
+      const t = len2 ? Math.max(0, Math.min(1, ((x - x1) * dx + (y - y1) * dy) / len2)) : 0;
+      best = Math.min(best, Math.hypot(x - (x1 + t * dx), y - (y1 + t * dy)));
+    }
+    return best;
+  }
+
+  // Pad van een vlak of band (cirkels rond de hitPoints vormen samen de band)
+  areaPath(p) {
+    const ctx = this.ctx;
+    ctx.beginPath();
+    if (p.polygons) {
+      for (const poly of p.polygons) {
+        poly.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+        ctx.closePath();
+      }
+    } else {
+      const r = p.hitRadiusPx ?? this.hitRadiusCanvasPx();
+      for (const [x, y] of p.hitPoints) { ctx.moveTo(x + r, y); ctx.arc(x, y, r, 0, Math.PI * 2); }
+    }
+  }
+
+  fillArea(p, fill, stroke) {
+    this.areaPath(p);
+    this.ctx.fillStyle = fill;
+    this.ctx.fill();
+    if (stroke) {
+      this.ctx.strokeStyle = stroke;
+      this.ctx.lineWidth = Math.max(2, 3 / this.screenScale());
+      this.ctx.lineJoin = "round";
+      this.ctx.stroke();
+    }
   }
 
   drawDot(x, y, r, style) {
@@ -632,7 +700,7 @@ export class TopoEngine {
     this.ctx.stroke();
   }
 
-  drawLabel(text, x, y) {
+  drawLabel(text, x, y, centered = false) {
     const ctx = this.ctx;
     const scale = this.screenScale();
 
@@ -652,9 +720,9 @@ export class TopoEngine {
     const dx = Math.max(10, 14 / scale);
     const dy = Math.max(10, 14 / scale);
 
-    // Plaats label rechtsboven van stip
-    let bx = x + dx;
-    let by = y - dy - h / 2;
+    // Plaats label rechtsboven van stip (vlakken: gecentreerd op het labelpunt)
+    let bx = centered ? x - w / 2 : x + dx;
+    let by = centered ? y - h / 2 : y - dy - h / 2;
 
     // Houd labels binnen canvas
     if (bx + w > this.canvas.width - 6) bx = x - dx - w;
@@ -696,8 +764,12 @@ export class TopoEngine {
 
     // Extra stippen + hover
     if (this.SHOW_ALL_DOTS) {
+      if (this.hoveredPlace && this.isArea(this.hoveredPlace)) {
+        this.fillArea(this.hoveredPlace, "rgba(0,0,0,0.12)", "rgba(0,0,0,0.35)");
+      }
       for (const p of this.activePlaces) {
-        const isHover = this.hoveredPlace && (p.name === this.hoveredPlace.name);
+        if (this.isArea(p)) continue;
+        const isHover = p === this.hoveredPlace;
         const r = isHover ? DOT_R * 1.5 : DOT_R;
         const alpha = isHover ? 0.55 : 0.35;
         this.drawDot(p.x, p.y, r, `rgba(0,0,0,${alpha})`);
@@ -707,12 +779,14 @@ export class TopoEngine {
     // Oefenmodus: labels tekenen
     if (this.practiceLabels) {
       for (const p of this.activePlaces) {
-        this.drawLabel(p.name, p.x, p.y);
+        this.drawLabel(p.name, p.x, p.y, this.isArea(p));
       }
     }
 
     // Modus 2: highlight huidige plek
-    if (this.current && this.mode === 2) {
+    if (this.current && this.mode === 2 && this.isArea(this.current)) {
+      this.fillArea(this.current, "rgba(255,0,0,0.30)", "rgba(255,0,0,0.90)");
+    } else if (this.current && this.mode === 2) {
       const R = this.ringRadiusCanvasPx();
       this.drawRing(this.current.x, this.current.y, R, "rgba(255,0,0,0.90)");
       this.drawDot(this.current.x, this.current.y, DOT_R, "rgba(255,0,0,0.90)");
