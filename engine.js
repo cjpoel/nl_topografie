@@ -10,8 +10,12 @@ export class TopoEngine {
     this.RING_SCREEN_PX = 34;
     this.HIT_SCREEN_PX  = 40;
 
-    // Klikken net buiten de rand van een vlak (kustlijn) telt nog mee
-    this.AREA_EDGE_PX = dataset.areaEdgePx ?? 12;
+    // Vlakken (landen), in scherm-pixels zodat het op elk scherm hetzelfde voelt:
+    // - klikken net buiten de rand (kustlijn, grens) telt nog mee
+    // - binnen een vingerbreedte van het labelpunt telt ook mee, zodat kleine
+    //   landen (Luxemburg, Zwitserland) aan te tikken zijn
+    this.AREA_EDGE_SCREEN_PX = dataset.areaEdgeScreenPx ?? 8;
+    this.AREA_MIN_TAP_SCREEN_PX = dataset.areaMinTapScreenPx ?? 24;
 
     // Auto door na antwoord
     this.DELAY_GOOD_MS = dataset.delayGoodMs ?? 900;
@@ -26,6 +30,8 @@ export class TopoEngine {
     this.mode = 1;
     this.started = false;
     this.current = null;
+    this.answered = false;   // voorkomt dubbel tellen tijdens de pauze na een antwoord
+    this.reveal = null;      // na een fout antwoord: toon kort waar het goede antwoord lag
 
     this.scoreGood = 0;
     this.scoreBad = 0;
@@ -40,7 +46,7 @@ export class TopoEngine {
     this.timerInterval = null;
 
     // Hover
-    this.hoveredPlace = null;
+    this.hoveredPlaces = [];
 
     // Practice (labels on/off)
     this.practiceLabels = this.loadPracticeLabels();
@@ -151,7 +157,7 @@ export class TopoEngine {
     // Hover
     this.canvas.addEventListener("pointermove", (e) => this.onPointerMove(e), { passive:true });
     this.canvas.addEventListener("pointerleave", () => {
-      this.hoveredPlace = null;
+      this.hoveredPlaces = [];
       this.canvas.style.cursor = "default";
       this.draw();
     });
@@ -210,13 +216,15 @@ export class TopoEngine {
     if (!this.activePlaces || this.activePlaces.length === 0) return;
 
     const { x, y } = this.fromClientToImageCoords(e.clientX, e.clientY);
-    const { place, hit } = this.nearestPlace(x, y);
-    const next = hit ? place : null;
+    // Alles wat onder de muis ligt oplichten: een land én de gebergteband of
+    // hoofdstad erin. Welke telt, hangt af van de vraag.
+    const next = this.activePlaces.filter(p =>
+      p.polygons ? p.polygons.some(poly => this.pointInPolygon(x, y, poly)) : this.zoneRel(p, x, y) <= 1);
 
-    this.canvas.style.cursor = next ? "pointer" : "default";
+    this.canvas.style.cursor = next.length ? "pointer" : "default";
 
-    if (next !== this.hoveredPlace) {
-      this.hoveredPlace = next;
+    if (next.length !== this.hoveredPlaces.length || next.some((p, i) => p !== this.hoveredPlaces[i])) {
+      this.hoveredPlaces = next;
       this.draw();
     }
   }
@@ -454,6 +462,8 @@ export class TopoEngine {
     }
 
     this.current = this.nextPlace();
+    this.answered = false;
+    this.reveal = null;
     this.setFeedback("", null);
 
     if (this.mode === 1) {
@@ -498,8 +508,9 @@ export class TopoEngine {
     this.deck = [];
     this.wrongPile = [];
     this.current = null;
+    this.reveal = null;
 
-    this.hoveredPlace = null;
+    this.hoveredPlaces = [];
     this.canvas.style.cursor = "default";
 
     this.updateScore();
@@ -514,11 +525,10 @@ export class TopoEngine {
     if (!this.started) return;
     if (this.mode !== 1 || !this.current) return;
     e.preventDefault();
+    if (this.answered) return;
 
     const { x, y } = this.fromClientToImageCoords(e.clientX, e.clientY);
-    // Klik binnen het gebied van de gevraagde plek telt altijd als goed, ook
-    // als er een andere plek dichterbij ligt (bijv. Parijs binnen Frankrijk).
-    const onCurrent = this.zoneRel(this.current, x, y) <= 1;
+    const onCurrent = this.isOnTarget(this.current, x, y);
     const { place, hit } = onCurrent ? { place: this.current, hit: true } : this.nearestPlace(x, y);
 
     if (!hit) {
@@ -529,6 +539,7 @@ export class TopoEngine {
     }
 
     this.scoreTotal++;
+    this.answered = true;
 
     if (place === this.current) {
       this.scoreGood++;
@@ -541,6 +552,8 @@ export class TopoEngine {
       this.streak = 0;
       this.wrongPile.push(this.current);
       this.setFeedback(`❌ Fout. Dat was ${place.name}. (Goed: ${this.current.name})`, false);
+      this.reveal = this.current;
+      this.draw();
       this.updateScore();
       setTimeout(() => this.newRound(), this.DELAY_BAD_MS);
     }
@@ -548,9 +561,10 @@ export class TopoEngine {
 
   checkTyped() {
     if (!this.started) return;
-    if (this.mode !== 2 || !this.current) return;
+    if (this.mode !== 2 || !this.current || this.answered) return;
 
     this.scoreTotal++;
+    this.answered = true;
     const candidates = [this.current.name, ...(this.current.aliases || [])];
     const ok = candidates.some(c => this.isCloseAnswer(this.answerInput.value, c));
 
@@ -572,8 +586,9 @@ export class TopoEngine {
 
   skipTyped() {
     if (!this.started) return;
-    if (this.mode !== 2 || !this.current) return;
+    if (this.mode !== 2 || !this.current || this.answered) return;
     this.scoreTotal++;
+    this.answered = true;
     this.streak = 0;
     this.wrongPile.push(this.current);
     this.setFeedback(`⏭️ Overgeslagen. Dit was: ${this.current.name}.`, false);
@@ -621,12 +636,30 @@ export class TopoEngine {
   zoneRel(p, x, y) {
     if (p.polygons) {
       if (p.polygons.some(poly => this.pointInPolygon(x, y, poly))) return 0.99;
+      // Net ernaast (0.995): verliest van een vlak dat de klik echt bevat (0.99)
+      const toCanvas = 1 / this.screenScale();
+      if (this.isSmallArea(p) && Math.hypot(x - p.x, y - p.y) <= this.AREA_MIN_TAP_SCREEN_PX * toCanvas) return 0.995;
       const d = Math.min(...p.polygons.map(poly => this.distToPolygonEdge(x, y, poly)));
-      return d <= this.AREA_EDGE_PX ? 0.995 : Infinity;
+      return d <= this.AREA_EDGE_SCREEN_PX * toCanvas ? 0.995 : Infinity;
     }
     const pts = p.hitPoints ?? [[p.x, p.y]];
     const d = Math.min(...pts.map(([px, py]) => Math.hypot(x - px, y - py)));
     return d / (p.hitRadiusPx ?? this.hitRadiusCanvasPx());
+  }
+
+  // Telt een klik als raak voor de gevraagde plek? Binnen het vlak altijd, ook
+  // als er een andere plek dichterbij ligt (Parijs binnen Frankrijk). Net
+  // buiten de grens alleen als je niet in een ander land van de toets klikt;
+  // bij een klein land telt een vingerbreedte rond het midden altijd mee.
+  isOnTarget(p, x, y) {
+    const rel = this.zoneRel(p, x, y);
+    if (rel > 1) return false;
+    if (!p.polygons || rel <= 0.99) return true;
+    // In de marge: telt niet als je in een kleiner land van de toets klikt
+    // (vraag België, tik in Luxemburg = fout; vraag Luxemburg, tik net in België = goed)
+    const size = this.areaSize(p);
+    return !this.activePlaces.some(q => q !== p && q.polygons && this.areaSize(q) < size
+      && q.polygons.some(poly => this.pointInPolygon(x, y, poly)));
   }
 
   nearestPlace(x, y) {
@@ -677,7 +710,8 @@ export class TopoEngine {
     this.areaPath(p);
     this.ctx.fillStyle = fill;
     this.ctx.fill();
-    if (stroke) {
+    // Een band bestaat uit losse cirkels: alleen vullen, anders zie je elke cirkelrand
+    if (stroke && p.polygons) {
       this.ctx.strokeStyle = stroke;
       this.ctx.lineWidth = Math.max(2, 3 / this.screenScale());
       this.ctx.lineJoin = "round";
@@ -764,12 +798,12 @@ export class TopoEngine {
 
     // Extra stippen + hover
     if (this.SHOW_ALL_DOTS) {
-      if (this.hoveredPlace && this.isArea(this.hoveredPlace)) {
-        this.fillArea(this.hoveredPlace, "rgba(0,0,0,0.12)", "rgba(0,0,0,0.35)");
+      for (const p of this.hoveredPlaces) {
+        if (this.isArea(p)) this.fillArea(p, "rgba(0,0,0,0.12)", "rgba(0,0,0,0.35)");
       }
       for (const p of this.activePlaces) {
         if (this.isArea(p)) continue;
-        const isHover = p === this.hoveredPlace;
+        const isHover = this.hoveredPlaces.includes(p);
         const r = isHover ? DOT_R * 1.5 : DOT_R;
         const alpha = isHover ? 0.55 : 0.35;
         this.drawDot(p.x, p.y, r, `rgba(0,0,0,${alpha})`);
@@ -786,11 +820,41 @@ export class TopoEngine {
     // Modus 2: highlight huidige plek
     if (this.current && this.mode === 2 && this.isArea(this.current)) {
       this.fillArea(this.current, "rgba(255,0,0,0.30)", "rgba(255,0,0,0.90)");
+      if (this.isSmallArea(this.current)) {
+        this.drawRing(this.current.x, this.current.y, this.AREA_MIN_TAP_SCREEN_PX / this.screenScale(), "rgba(255,0,0,0.90)");
+      }
     } else if (this.current && this.mode === 2) {
       const R = this.ringRadiusCanvasPx();
       this.drawRing(this.current.x, this.current.y, R, "rgba(255,0,0,0.90)");
       this.drawDot(this.current.x, this.current.y, DOT_R, "rgba(255,0,0,0.90)");
     }
+
+    // Na een fout antwoord (klikmodus): laat zien waar het goede antwoord lag
+    if (this.reveal) {
+      const GREEN = "rgba(22,163,74,0.95)";
+      if (this.isArea(this.reveal)) {
+        this.fillArea(this.reveal, "rgba(22,163,74,0.30)", GREEN);
+        if (this.isSmallArea(this.reveal)) {
+          this.drawRing(this.reveal.x, this.reveal.y, this.AREA_MIN_TAP_SCREEN_PX / this.screenScale(), GREEN);
+        }
+      } else {
+        this.drawRing(this.reveal.x, this.reveal.y, this.ringRadiusCanvasPx(), GREEN);
+        this.drawDot(this.reveal.x, this.reveal.y, DOT_R, GREEN);
+      }
+    }
+  }
+
+  // Kleinste afmeting (canvas-px) van het grootste deel van een vlak
+  areaSize(p) {
+    const pts = p.polygons[0];
+    const w = Math.max(...pts.map(q => q[0])) - Math.min(...pts.map(q => q[0]));
+    const h = Math.max(...pts.map(q => q[1])) - Math.min(...pts.map(q => q[1]));
+    return Math.min(w, h);
+  }
+
+  // Vlak dat op het scherm nauwelijks groter is dan een vingertop (bijv. Luxemburg)
+  isSmallArea(p) {
+    return !!p.polygons && this.areaSize(p) * this.screenScale() < this.AREA_MIN_TAP_SCREEN_PX * 1.5;
   }
 
   // ---------- TEXT HELPERS ----------
