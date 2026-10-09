@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Topografie – Spelen</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20261009-1">
 </head>
 <body>
   <div class="wrap">
@@ -82,7 +82,7 @@
 
             <div class="provHeader">
               <div class="provTitle">
-                <b>Provincies</b>
+                <b id="groupLabel">Provincies</b>
                 <span class="tag" id="activeCount">0 plaatsen</span>
               </div>
               <button id="selectAll" class="btn" type="button">Alles</button>
@@ -115,7 +115,7 @@
 
   <script type="module">
     // Verhoog deze als je JS wijzigt (cache-buster voor engine + datasets)
-    const APP_VERSION = "v1.2.1";
+    const APP_VERSION = "v1.3.0";
 
     const params = new URLSearchParams(location.search);
     const set = params.get("set") || "noord";

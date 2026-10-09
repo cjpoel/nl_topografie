@@ -41,6 +41,19 @@ export class TopoEngine {
 
     // Practice (labels on/off)
     this.practiceLabels = this.loadPracticeLabels();
+
+    // Teksten (per dataset aan te passen; standaard voor NL-provincies)
+    this.GROUP_LABEL = dataset.groupLabel ?? "Provincies";
+    this.ITEM_LABEL = dataset.itemLabel ?? "plaatsen";
+    this.TYPE_PROMPT = dataset.typePrompt ?? "Welke plaats is dit? (typ de naam)";
+    this.TYPE_PLACEHOLDER = dataset.typePlaceholder ?? "Typ de plaatsnaam…";
+  }
+
+  idlePrompt() {
+    const groups = this.GROUP_LABEL.toLowerCase();
+    return this.practiceLabels
+      ? `Oefenmodus: namen staan aan. Kies ${groups} en oefen, of druk op Start toets.`
+      : `Selecteer ${groups} en druk op Start toets.`;
   }
 
   mount() {
@@ -78,6 +91,10 @@ export class TopoEngine {
     this.startTestBtn = document.getElementById("startTest");
     this.activeCountEl = document.getElementById("activeCount");
 
+    const groupLabelEl = document.getElementById("groupLabel");
+    if (groupLabelEl) groupLabelEl.textContent = this.GROUP_LABEL;
+    if (this.answerInput) this.answerInput.placeholder = this.TYPE_PLACEHOLDER;
+
     // Modal
     this.modalBackdrop = document.getElementById("modalBackdrop");
     this.closeModalBtn = document.getElementById("closeModal");
@@ -109,9 +126,7 @@ export class TopoEngine {
       this.draw();
       this.setStarted(false);
       this.setFeedback("", null);
-      this.promptEl.textContent = this.practiceLabels
-        ? "Oefenmodus: namen staan aan. Kies provincies en oefen, of druk op Start toets."
-        : "Selecteer provincies en druk op Start toets.";
+      this.promptEl.textContent = this.idlePrompt();
     };
 
     // Events
@@ -182,9 +197,7 @@ export class TopoEngine {
     this.draw();
 
     if (!this.started) {
-      this.promptEl.textContent = this.practiceLabels
-        ? "Oefenmodus: namen staan aan. Kies provincies en oefen, of druk op Start toets."
-        : "Selecteer provincies en druk op Start toets.";
+      this.promptEl.textContent = this.idlePrompt();
     }
   }
 
@@ -194,10 +207,8 @@ export class TopoEngine {
     if (!this.activePlaces || this.activePlaces.length === 0) return;
 
     const { x, y } = this.fromClientToImageCoords(e.clientX, e.clientY);
-    const { place, dist } = this.nearestPlace(x, y);
-
-    const HOVER_R = this.hitRadiusCanvasPx();
-    const next = (place && dist <= HOVER_R) ? place : null;
+    const { place, hit } = this.nearestPlace(x, y);
+    const next = hit ? place : null;
 
     this.canvas.style.cursor = next ? "pointer" : "default";
 
@@ -360,7 +371,7 @@ export class TopoEngine {
 
   recomputeActivePlaces(clearDeck = true) {
     this.activePlaces = this.PLACES.filter(p => this.selectedProvinces.has(p.province));
-    this.activeCountEl.textContent = `${this.activePlaces.length} plaatsen`;
+    this.activeCountEl.textContent = `${this.activePlaces.length} ${this.ITEM_LABEL}`;
     this.startTestBtn.disabled = this.activePlaces.length === 0;
     if (clearDeck) this.deck = [];
     this.draw();
@@ -428,7 +439,7 @@ export class TopoEngine {
       return;
     }
     if (this.activePlaces.length === 0) {
-      this.promptEl.textContent = "Selecteer provincies en druk op Start toets.";
+      this.promptEl.textContent = this.idlePrompt();
       return;
     }
 
@@ -446,7 +457,7 @@ export class TopoEngine {
       this.promptEl.textContent = `Klik op: ${this.current.name}`;
       this.typingArea.style.display = "none";
     } else {
-      this.promptEl.textContent = `Welke plaats is dit? (typ de naam)`;
+      this.promptEl.textContent = this.TYPE_PROMPT;
       this.typingArea.style.display = "flex";
       this.answerInput.value = "";
       this.answerInput.focus();
@@ -492,9 +503,7 @@ export class TopoEngine {
     this.setFeedback("", null);
     this.setStarted(false);
     this.draw();
-    this.promptEl.textContent = this.practiceLabels
-      ? "Oefenmodus: namen staan aan. Kies provincies en oefen, of druk op Start toets."
-      : "Selecteer provincies en druk op Start toets.";
+    this.promptEl.textContent = this.idlePrompt();
   }
 
   // ---------- ANSWERS ----------
@@ -504,9 +513,9 @@ export class TopoEngine {
     e.preventDefault();
 
     const { x, y } = this.fromClientToImageCoords(e.clientX, e.clientY);
-    const { place, dist } = this.nearestPlace(x, y);
+    const { place, hit } = this.nearestPlace(x, y);
 
-    if (!place || dist > this.hitRadiusCanvasPx()) {
+    if (!hit) {
       this.streak = 0;
       this.setFeedback("Klik iets dichter bij een stip 🙂", false);
       this.updateScore();
@@ -536,7 +545,8 @@ export class TopoEngine {
     if (this.mode !== 2 || !this.current) return;
 
     this.scoreTotal++;
-    const ok = this.isCloseAnswer(this.answerInput.value, this.current.name);
+    const candidates = [this.current.name, ...(this.current.aliases || [])];
+    const ok = candidates.some(c => this.isCloseAnswer(this.answerInput.value, c));
 
     if (ok) {
       this.scoreGood++;
@@ -591,13 +601,20 @@ export class TopoEngine {
     return { x, y };
   }
 
+  // Een plek mag een eigen klikradius hebben (place.hitRadiusPx) en meerdere
+  // klikpunten (place.hitPoints: [[x,y], ...]), bijv. een gebergte als band.
+  // Afstand telt relatief aan de radius, zodat een groot gebied niet wint van
+  // een stip waar je vlak naast klikt.
   nearestPlace(x, y) {
-    let best = null, bestDist = Infinity;
+    const defaultR = this.hitRadiusCanvasPx();
+    let best = null, bestRel = Infinity;
     for (const p of this.activePlaces) {
-      const d = Math.hypot(x - p.x, y - p.y);
-      if (d < bestDist) { bestDist = d; best = p; }
+      const pts = p.hitPoints ?? [[p.x, p.y]];
+      const d = Math.min(...pts.map(([px, py]) => Math.hypot(x - px, y - py)));
+      const rel = d / (p.hitRadiusPx ?? defaultR);
+      if (rel < bestRel) { bestRel = rel; best = p; }
     }
-    return { place: best, dist: bestDist };
+    return { place: best, hit: !!best && bestRel <= 1 };
   }
 
   drawDot(x, y, r, style) {

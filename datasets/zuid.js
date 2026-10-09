@@ -17,7 +17,7 @@ export const DATASET = {
 
     // Noord-Brabant
     { name: "Oss",              province: "Noord-Brabant", x: 1514.6, y: 894.6 },
-    { name: "'s-Hertogenbosch", province: "Noord-Brabant", x: 1370.6, y: 966.6 },
+    { name: "'s-Hertogenbosch", province: "Noord-Brabant", x: 1370.6, y: 966.6, aliases: ["Den Bosch", "s-Hertogenbosch", "Hertogenbosch"] },
     { name: "Breda",            province: "Noord-Brabant", x: 1012.6, y: 1088.6 },
     { name: "Tilburg",          province: "Noord-Brabant", x: 1226.6, y: 1122.6 },
     { name: "Roosendaal",       province: "Noord-Brabant", x: 802.6,  y: 1150.6 },
