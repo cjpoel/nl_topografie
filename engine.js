@@ -16,6 +16,8 @@ export class TopoEngine {
     //   landen (Luxemburg, Zwitserland) aan te tikken zijn
     this.AREA_EDGE_SCREEN_PX = dataset.areaEdgeScreenPx ?? 8;
     this.AREA_MIN_TAP_SCREEN_PX = dataset.areaMinTapScreenPx ?? 24;
+    // Lijnen (rivieren): tikken binnen deze afstand (scherm-pixels) telt mee
+    this.LINE_TAP_SCREEN_PX = dataset.lineTapScreenPx ?? 16;
 
     // Auto door na antwoord
     this.DELAY_GOOD_MS = dataset.delayGoodMs ?? 900;
@@ -626,8 +628,9 @@ export class TopoEngine {
   // - punt (standaard): stip op x/y, klikradius hitRadiusPx (dataset of plek)
   // - band: hitPoints [[x,y], ...] met hitRadiusPx, bijv. een gebergte
   // - vlak: polygons [[[x,y], ...], ...], bijv. een land; x/y is dan het labelpunt
+  // - lijn: lines [[[x,y], ...], ...], bijv. een rivier; x/y is het labelpunt
   isArea(p) {
-    return !!(p.polygons || p.hitPoints);
+    return !!(p.polygons || p.hitPoints || p.lines);
   }
 
   // Relatieve afstand tot de klikzone van een plek: <= 1 is raak.
@@ -639,8 +642,12 @@ export class TopoEngine {
       // Net ernaast (0.995): verliest van een vlak dat de klik echt bevat (0.99)
       const toCanvas = 1 / this.screenScale();
       if (this.isSmallArea(p) && Math.hypot(x - p.x, y - p.y) <= this.AREA_MIN_TAP_SCREEN_PX * toCanvas) return 0.995;
-      const d = Math.min(...p.polygons.map(poly => this.distToPolygonEdge(x, y, poly)));
+      const d = Math.min(...p.polygons.map(poly => this.distToSegments(x, y, poly, true)));
       return d <= this.AREA_EDGE_SCREEN_PX * toCanvas ? 0.995 : Infinity;
+    }
+    if (p.lines) {
+      const d = Math.min(...p.lines.map(line => this.distToSegments(x, y, line, false)));
+      return d / (this.LINE_TAP_SCREEN_PX / this.screenScale());
     }
     const pts = p.hitPoints ?? [[p.x, p.y]];
     const d = Math.min(...pts.map(([px, py]) => Math.hypot(x - px, y - py)));
@@ -680,10 +687,11 @@ export class TopoEngine {
     return inside;
   }
 
-  distToPolygonEdge(x, y, poly) {
+  // Afstand tot een lijn door de punten; closed = ook het laatste punt met het eerste verbinden
+  distToSegments(x, y, pts, closed) {
     let best = Infinity;
-    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-      const [x1, y1] = poly[j], [x2, y2] = poly[i];
+    for (let i = closed ? 0 : 1, j = closed ? pts.length - 1 : 0; i < pts.length; j = i++) {
+      const [x1, y1] = pts[j], [x2, y2] = pts[i];
       const dx = x2 - x1, dy = y2 - y1, len2 = dx * dx + dy * dy;
       const t = len2 ? Math.max(0, Math.min(1, ((x - x1) * dx + (y - y1) * dy) / len2)) : 0;
       best = Math.min(best, Math.hypot(x - (x1 + t * dx), y - (y1 + t * dy)));
@@ -695,7 +703,9 @@ export class TopoEngine {
   areaPath(p) {
     const ctx = this.ctx;
     ctx.beginPath();
-    if (p.polygons) {
+    if (p.lines) {
+      for (const line of p.lines) line.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+    } else if (p.polygons) {
       for (const poly of p.polygons) {
         poly.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
         ctx.closePath();
@@ -708,6 +718,21 @@ export class TopoEngine {
 
   fillArea(p, fill, stroke) {
     this.areaPath(p);
+    const ctx = this.ctx;
+    if (p.lines) {
+      // Rivier: brede zachte band (de tikzone) met een duidelijke lijn erin
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      ctx.strokeStyle = fill;
+      ctx.lineWidth = (this.LINE_TAP_SCREEN_PX * 1.4) / this.screenScale();
+      ctx.stroke();
+      if (stroke) {
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = 4 / this.screenScale();
+        ctx.stroke();
+      }
+      return;
+    }
     this.ctx.fillStyle = fill;
     this.ctx.fill();
     // Een band bestaat uit losse cirkels: alleen vullen, anders zie je elke cirkelrand
